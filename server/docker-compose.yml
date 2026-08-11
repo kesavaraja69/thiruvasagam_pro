@@ -7,7 +7,7 @@ services:
       dockerfile: Dockerfile
     container_name: thiruvasagam-songs
     ports:
-      - "8080:80"
+      - "8484:80"
     volumes:
       # Mount songs directory for live updates without rebuilding
       - ./songs:/usr/share/nginx/html/songs
