@@ -10,6 +10,9 @@ import 'package:thiruvasagampro/view/widgets/custom_banner_ad.dart'
 import 'package:thiruvasagampro/view/widgets/eye_protection_overlay.dart';
 import 'package:thiruvasagampro/view/widgets/parchment_background.dart';
 import 'package:thiruvasagampro/view/widgets/tts_player_widget.dart';
+import 'package:thiruvasagampro/view/widgets/audio_player_widget.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:http/http.dart' as http;
 import 'package:thiruvasagampro/viewmodels/reading_provider.dart';
 
 class ReadingScreen extends StatefulWidget {
@@ -26,11 +29,14 @@ class ReadingScreen extends StatefulWidget {
 }
 
 class _ReadingScreenState extends State<ReadingScreen> {
+  bool _isAudioAvailable = false;
+  bool _isCheckingAudio = true;
+  int? _lastCheckedChapterId;
+
   @override
   void initState() {
     super.initState();
-    // Load the specific song when the screen opens
-
+    _lastCheckedChapterId = widget.chapterId;
     Future.microtask(() {
       if (mounted) {
         Provider.of<ReadingProvider>(context, listen: false).loadBookmarks(
@@ -39,13 +45,84 @@ class _ReadingScreenState extends State<ReadingScreen> {
         );
       }
     });
+    _checkAudioAvailability(widget.chapterId);
+  }
+
+  Future<void> _checkAudioAvailability(int? chapterId) async {
+    if (!mounted) return;
+
+    setState(() {
+      _isCheckingAudio = true;
+    });
+
+    if (chapterId == null || chapterId == -1) {
+      if (mounted) {
+        setState(() {
+          _isAudioAvailable = false;
+          _isCheckingAudio = false;
+        });
+      }
+      return;
+    }
+
+    final audioUrl = 'https://thiruvasagam.dftacademy.in/song$chapterId.mp3';
+
+    // Check connectivity
+    try {
+      final connectivityResults = await Connectivity().checkConnectivity();
+      if (connectivityResults.isEmpty ||
+          connectivityResults.contains(ConnectivityResult.none)) {
+        if (mounted) {
+          setState(() {
+            _isAudioAvailable = false;
+            _isCheckingAudio = false;
+          });
+        }
+        return;
+      }
+    } catch (_) {}
+
+    // HEAD request to verify URL
+    try {
+      final response = await http.head(Uri.parse(audioUrl));
+      if (mounted) {
+        setState(() {
+          _isAudioAvailable = response.statusCode == 200;
+          _isCheckingAudio = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isAudioAvailable = false;
+          _isCheckingAudio = false;
+        });
+      }
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final provider = Provider.of<ReadingProvider>(context);
+    final currentChapterId = provider.currentChapter.id;
+    if (currentChapterId != null &&
+        currentChapterId != -1 &&
+        currentChapterId != _lastCheckedChapterId) {
+      _lastCheckedChapterId = currentChapterId;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _checkAudioAvailability(currentChapterId);
+      });
+    }
   }
 
   @override
   void dispose() {
     // Reset chapter ad counters when navigating away (e.g. back to home)
-    Provider.of<ReadingProvider>(context, listen: false)
-        .resetChapterClickCounters();
+    Provider.of<ReadingProvider>(
+      context,
+      listen: false,
+    ).resetChapterClickCounters();
     super.dispose();
   }
 
@@ -61,243 +138,326 @@ class _ReadingScreenState extends State<ReadingScreen> {
           backgroundColor: Colors.transparent,
           body: SafeArea(
             child: Consumer<ReadingProvider>(
-            builder: (context, provider, child) {
-              if (provider.isLoading) {
-                return const Center(
-                  child: CircularProgressIndicator(color: AppColors.vintageInk),
-                );
-              }
-
-              // 🚨 2. NEW: Show a message if the database is literally empty
-              if (provider.currentChapter.id == -1) {
-                return const Center(
-                  child: Text(
-                    'தரவு கிடைக்கவில்லை. (No data found)',
-                    style: TextStyle(fontSize: 18),
-                  ),
-                );
-              }
-
-              return Column(
-                children: [
-                  // 1. Custom Header (Title & Back/Bookmark)
-                  Container(
-                    height: 75,
-                    decoration: BoxDecoration(
-                      color: AppColors.transparent,
-                      image: DecorationImage(
-                        image: AssetImage(AppAssets.topBarPaper),
-                        fit: BoxFit
-                            .fill, // Stretches the image to fill the screen
-                      ),
+              builder: (context, provider, child) {
+                if (provider.isLoading) {
+                  return const Center(
+                    child: CircularProgressIndicator(
+                      color: AppColors.vintageInk,
                     ),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 2.0),
-                      child: Stack(
-                        children: [
-                          Align(
-                            alignment: Alignment.topLeft,
-                            child: _buildImageBtn(
-                              AppAssets.iconBack,
-                              () => Navigator.pop(context),
-                            ),
-                          ),
-                          Align(
-                            alignment: Alignment.topCenter,
-                            child: Padding(
-                              padding: const EdgeInsets.only(
-                                top: 12.0,
-                                left: 60,
-                                right: 60,
+                  );
+                }
+
+                // 🚨 2. NEW: Show a message if the database is literally empty
+                if (provider.currentChapter.id == -1) {
+                  return const Center(
+                    child: Text(
+                      'தரவு கிடைக்கவில்லை. (No data found)',
+                      style: TextStyle(fontSize: 18),
+                    ),
+                  );
+                }
+
+                return Column(
+                  children: [
+                    // 1. Custom Header (Title & Back/Bookmark)
+                    Container(
+                      height: 70,
+                      decoration: BoxDecoration(
+                        color: AppColors.transparent,
+                        image: DecorationImage(
+                          image: AssetImage(AppAssets.topBarPaper),
+                          fit: BoxFit
+                              .fill, // Stretches the image to fill the screen
+                        ),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 2.0),
+                        child: Stack(
+                          children: [
+                            Align(
+                              alignment: Alignment.topLeft,
+                              child: _buildImageBtntb(
+                                AppAssets.iconBack,
+                                () => Navigator.pop(context),
                               ),
-                              child: SizedBox(
-                                width: double
-                                    .infinity, // Forces it to use the available width
-                                child: FittedBox(
-                                  fit: BoxFit
-                                      .scaleDown, // Shrinks the text automatically if it's too wide
-                                  alignment: Alignment.topCenter,
-                                  child: Text(
-                                    provider.currentChapter.title,
-                                    style: ResponsiveText.chapterTitle(
-                                      context,
-                                      userScale:
-                                          0.9, // The starting size before any shrinking happens
+                            ),
+                            Align(
+                              alignment: Alignment.topCenter,
+                              child: Padding(
+                                padding: const EdgeInsets.only(
+                                  top: 12.0,
+                                  left: 60,
+                                  right: 60,
+                                ),
+                                child: SizedBox(
+                                  width: double
+                                      .infinity, // Forces it to use the available width
+                                  child: FittedBox(
+                                    fit: BoxFit
+                                        .scaleDown, // Shrinks the text automatically if it's too wide
+                                    alignment: Alignment.topCenter,
+                                    child: Text(
+                                      provider.currentChapter.title,
+                                      style: ResponsiveText.chapterTitle(
+                                        context,
+                                        userScale:
+                                            0.9, // The starting size before any shrinking happens
+                                      ),
                                     ),
                                   ),
                                 ),
                               ),
                             ),
-                          ),
-                          Align(
-                            alignment: Alignment.topRight,
-                            child: _buildImageBtn(
-                              provider.currentChapter.isBookmarked == true
-                                  ? AppAssets.iconBookmarkFilled
-                                  : AppAssets.iconBookmarkOutline,
-                              () async {
-                                await provider.toggleBookmarkWithAd(
-                                  context,
-                                  isFromBookmarks: widget.isFromBookmarks,
-                                );
-                                if (context.mounted) {
-                                  AppSnackBars.showBookmark(
+                            Align(
+                              alignment: Alignment.topRight,
+                              child: _buildImageBtntb(
+                                provider.currentChapter.isBookmarked == true
+                                    ? AppAssets.iconBookmarkFilled
+                                    : AppAssets.iconBookmarkOutline,
+                                () async {
+                                  await provider.toggleBookmarkWithAd(
                                     context,
-                                    isBookmarked:
-                                        provider.currentChapter.isBookmarked,
                                     isFromBookmarks: widget.isFromBookmarks,
                                   );
-                                }
-                              },
+                                  if (context.mounted) {
+                                    AppSnackBars.showBookmark(
+                                      context,
+                                      isBookmarked:
+                                          provider.currentChapter.isBookmarked,
+                                      isFromBookmarks: widget.isFromBookmarks,
+                                    );
+                                  }
+                                },
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const CustomBannerAd(),
-                  // 3. Action Toolbar (A-, A+, Copy, Share, Tt)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 2),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        _buildImageBtn(AppAssets.iconFontDec, () async {
-                          await provider.handleToolbarAction(
-                            context,
-                            provider.decreaseFont,
-                          );
-                          // provider.decreaseFont;
-                        }),
-                        _buildImageBtn(
-                          AppAssets.iconFontInc,
-                          () async {
-                            await provider.handleToolbarAction(
-                              context,
-                              provider.increaseFont,
-                            );
-                          },
-                          //provider.increaseFont,
-                        ),
-                        _buildImageBtn(
-                          AppAssets.iconCopy,
-                          () async {
-                            await provider.handleToolbarAction(
-                              context,
-                              provider.copyToClipboard,
-                            );
-                            if (context.mounted) {
-                              AppSnackBars.showBar(
-                                context,
-                                title: "பாடல் நகலெடுக்கப்பட்டது (Copied)",
-                              );
-                            }
-                          },
-                          // () => provider.copyToClipboard(context),
-                        ),
-                        _buildImageBtn(
-                          AppAssets.iconShare,
-                          () async {
-                            await provider.handleToolbarAction(
-                              context,
-                              provider.shareSong,
-                            );
-                          },
-                          // provider.shareSong
-                        ),
-                        _buildImageBtn(
-                          AppAssets.iconFontChange,
-                          () async {
-                            await provider.handleToolbarAction(context, () {});
-                            if (context.mounted) {
-                              _showFontPicker(context, provider);
-                            }
-                          },
-                          //() => _showFontPicker(context, provider),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    child: SizedBox(
-                      height: 45,
-                      width: double.infinity,
-                      child: Stack(
-                        children: [
-                          Image.asset(AppAssets.topOrnament, fit: BoxFit.fill),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 20.0,
-                              vertical: 8.0,
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                GestureDetector(
-                                  onTap: () => provider.previousChapter(context),
-                                  child: Text(
-                                    '← முந்தைய',
-                                    style: _navTextStyle(provider.hasPrevious),
-                                  ),
-                                ),
-                                const Text(
-                                  'பாடல்',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 18,
-                                  ),
-                                ),
-                                GestureDetector(
-                                  onTap: () => provider.nextChapter(context),
-                                  child: Text(
-                                    'அடுத்த →',
-                                    style: _navTextStyle(provider.hasNext),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  // 5. Scrollable Lyrics Content
-                  Expanded(
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                      child: Text(
-                        provider.currentChapter.song,
-                        style: TextStyle(
-                          fontSize: provider.fontSize,
-                          fontFamily: provider.currentFontFamily,
-                          color: Colors.black,
-                          fontWeight: FontWeight.w800,
-                          height: 1.6, // Gives nice line spacing for Tamil text
+                          ],
                         ),
                       ),
                     ),
-                  ),
-                  
-                  // 6. TTS Player Widget
-                  if (provider.currentChapter.song.isNotEmpty)
+                    const CustomBannerAd(),
+                    // 3. Action Toolbar (A-, A+, Copy, Share, Tt)
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
-                      child: TTSPlayerWidget(
-                        textToSpeak: provider.currentChapter.song,
-                        title: provider.currentChapter.title,
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          _buildImageBtn(AppAssets.iconFontDec, () async {
+                            await provider.handleToolbarAction(
+                              context,
+                              provider.decreaseFont,
+                            );
+                            // provider.decreaseFont;
+                          }),
+                          _buildImageBtn(
+                            AppAssets.iconFontInc,
+                            () async {
+                              await provider.handleToolbarAction(
+                                context,
+                                provider.increaseFont,
+                              );
+                            },
+                            //provider.increaseFont,
+                          ),
+                          _buildImageBtn(
+                            AppAssets.iconCopy,
+                            () async {
+                              await provider.handleToolbarAction(
+                                context,
+                                provider.copyToClipboard,
+                              );
+                              if (context.mounted) {
+                                AppSnackBars.showBar(
+                                  context,
+                                  title: "பாடல் நகலெடுக்கப்பட்டது (Copied)",
+                                );
+                              }
+                            },
+                            // () => provider.copyToClipboard(context),
+                          ),
+                          _buildImageBtn(
+                            AppAssets.iconShare,
+                            () async {
+                              await provider.handleToolbarAction(
+                                context,
+                                provider.shareSong,
+                              );
+                            },
+                            // provider.shareSong
+                          ),
+                          _buildImageBtn(
+                            AppAssets.iconFontChange,
+                            () async {
+                              await provider.handleToolbarAction(
+                                context,
+                                () {},
+                              );
+                              if (context.mounted) {
+                                _showFontPicker(context, provider);
+                              }
+                            },
+                            //() => _showFontPicker(context, provider),
+                          ),
+                        ],
                       ),
                     ),
-                  
-                  const CustomBannerAd(),
-                ],
-              );
-            },
+
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: SizedBox(
+                        height: 40,
+                        width: double.infinity,
+                        child: Stack(
+                          children: [
+                            Image.asset(
+                              AppAssets.topOrnament,
+                              fit: BoxFit.fill,
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 20.0,
+                                vertical: 8.0,
+                              ),
+                              child: Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  GestureDetector(
+                                    onTap: () =>
+                                        provider.previousChapter(context),
+                                    child: Text(
+                                      '← முந்தைய',
+                                      style: _navTextStyle(
+                                        provider.hasPrevious,
+                                      ),
+                                    ),
+                                  ),
+                                  Text(
+                                    'பாடல் ${widget.chapterId}/51',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 17,
+                                    ),
+                                  ),
+                                  GestureDetector(
+                                    onTap: () => provider.nextChapter(context),
+                                    child: Text(
+                                      'அடுத்த →',
+                                      style: _navTextStyle(provider.hasNext),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    // 5. Scrollable Lyrics Content
+                    Expanded(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                        child: Text(
+                          provider.currentChapter.song,
+                          style: TextStyle(
+                            fontSize: provider.fontSize,
+                            fontFamily: provider.currentFontFamily,
+                            color: Colors.black,
+                            fontWeight: FontWeight.w800,
+                            height:
+                                1.6, // Gives nice line spacing for Tamil text
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    // 6. Audio Players Section
+                    if (provider.currentChapter.song.isNotEmpty)
+                      Container(
+                        padding: const EdgeInsets.only(top: 8.0),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // URL Audio Player (for streaming/cached audio) - show only if URL available
+                            if (_isCheckingAudio)
+                              // Show loading while checking
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12.0,
+                                  vertical: 4.0,
+                                ),
+                                child: Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.dividerBrown.withValues(
+                                      alpha: 0.8,
+                                    ),
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(
+                                          color: Colors.white.withValues(
+                                            alpha: 0.7,
+                                          ),
+                                          strokeWidth: 2,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        'Checking audio...',
+                                        style: TextStyle(
+                                          color: Colors.white.withValues(
+                                            alpha: 0.7,
+                                          ),
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              )
+                            else if (_isAudioAvailable)
+                              // Show URL Audio Player if available
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12.0,
+                                  vertical: 4.0,
+                                ),
+                                child: AudioPlayerWidget(
+                                  audioUrl: provider.currentChapter.id != null
+                                      ? 'https://thiruvasagam.dftacademy.in/song${provider.currentChapter.id}.mp3'
+                                      : null,
+                                  title: provider.currentChapter.title,
+                                ),
+                              )
+                            else
+                              // Show TTS Player if URL not available
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12.0,
+                                  vertical: 4.0,
+                                ),
+                                child: TTSPlayerWidget(
+                                  textToSpeak: provider.currentChapter.song,
+                                  title: provider.currentChapter.title,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+
+                    const CustomBannerAd(),
+                  ],
+                );
+              },
+            ),
           ),
         ),
-      ),
       ),
     );
   }
@@ -308,11 +468,27 @@ class _ReadingScreenState extends State<ReadingScreen> {
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.all(8.0),
+        padding: const EdgeInsets.all(6.0),
+        child: Image.asset(
+          assetPath,
+          width: 35,
+          height: 35,
+          fit: BoxFit.contain,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildImageBtntb(String assetPath, VoidCallback onTap) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.all(6.0),
         child: Image.asset(
           assetPath,
           width: 45,
-          height: 35,
+          height: 45,
           fit: BoxFit.contain,
         ),
       ),

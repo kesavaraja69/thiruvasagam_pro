@@ -41,7 +41,7 @@ void main() {
     });
 
     test('Should prefer splitting at newlines', () {
-      final text = 'Line 1\n' + 'A' * 2500 + '\nLine 3';
+      final text = 'Line 1\n${'A' * 2500}\nLine 3';
       final chunks = TTSService.splitTextIntoChunks(text);
 
       if (chunks.length > 1) {
@@ -50,7 +50,7 @@ void main() {
     });
 
     test('Should prefer splitting at periods', () {
-      final text = 'Sentence one. ' + 'A' * 2500 + '. Sentence three.';
+      final text = 'Sentence one. ${'A' * 2500}. Sentence three.';
       final chunks = TTSService.splitTextIntoChunks(text);
 
       if (chunks.length > 1) {
@@ -70,7 +70,7 @@ void main() {
     });
 
     test('Text with only spaces should split at spaces', () {
-      final text = 'A' * 1500 + ' ' + 'B' * 1500 + ' ' + 'C' * 1000;
+      final text = '${'A' * 1500} ${'B' * 1500} ${'C' * 1000}';
       final chunks = TTSService.splitTextIntoChunks(text);
       expect(chunks.length, greaterThan(1));
     });

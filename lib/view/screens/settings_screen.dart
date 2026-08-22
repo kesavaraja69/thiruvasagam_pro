@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:thiruvasagampro/services/audio_cache_service.dart';
 import 'package:thiruvasagampro/utils/app_assets.dart';
 import 'package:thiruvasagampro/utils/app_colors.dart';
 import 'package:thiruvasagampro/view/screens/about_screen.dart';
@@ -122,6 +123,16 @@ class SettingsScreen extends StatelessWidget {
             icon: Icons.mail_outline,
             title: 'தொடர்புக்கு (Contact Us)',
             onTap: _launchEmail,
+          ),
+          _buildDivider(),
+
+          // ===== AUDIO CACHE SECTION =====
+          _buildSectionHeader('🎵 ஆடியோ கேச் (Audio Cache)'),
+
+          _buildSettingsItem(
+            icon: Icons.cleaning_services_outlined,
+            title: 'கேசை அழி (Clear Audio Cache)',
+            onTap: () => _showClearCacheDialog(context),
           ),
           _buildDivider(),
 
@@ -274,5 +285,42 @@ class SettingsScreen extends StatelessWidget {
         fit: BoxFit.contain,
       ),
     );
+  }
+
+  Future<void> _showClearCacheDialog(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Clear Audio Cache?'),
+        content: const Text(
+          'This will remove all cached audio files. You will need to download them again when offline.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text(
+              'Clear',
+              style: TextStyle(color: Colors.red),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await AudioCacheService.instance.clearCache();
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Audio cache cleared successfully'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    }
   }
 }

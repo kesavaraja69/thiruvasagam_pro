@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:thiruvasagampro/services/tts_service.dart';
@@ -5,6 +6,8 @@ import 'package:thiruvasagampro/utils/ad_helper.dart';
 import 'package:thiruvasagampro/utils/app_colors.dart';
 import 'package:thiruvasagampro/utils/app_open_ad_manager.dart';
 
+/// A production-quality TTS player widget for text-to-speech playback.
+/// Features: Play/Pause, Stop, Voice selection, Speed/Pitch/Volume controls.
 class TTSPlayerWidget extends StatefulWidget {
   final String textToSpeak;
   final String? title;
@@ -18,6 +21,8 @@ class TTSPlayerWidget extends StatefulWidget {
 class _TTSPlayerWidgetState extends State<TTSPlayerWidget>
     with SingleTickerProviderStateMixin {
   final TTSService _ttsService = TTSService();
+
+  // State flags
   bool _hasAcquired = false;
   bool _isPlaying = false;
   bool _isPaused = false;
@@ -25,20 +30,24 @@ class _TTSPlayerWidgetState extends State<TTSPlayerWidget>
   bool _isExpanded = false;
   bool _isVoicesLoading = true;
   bool _hasInitError = false;
+
+  // Ad
   InterstitialAd? _interstitialAd;
   int _stopCount = 0;
-  late AnimationController _animController;
+
+  // Animation
+  late AnimationController _expandController;
   late Animation<double> _expandAnimation;
 
   @override
   void initState() {
     super.initState();
-    _animController = AnimationController(
+    _expandController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 250),
+      duration: const Duration(milliseconds: 300),
     );
     _expandAnimation = CurvedAnimation(
-      parent: _animController,
+      parent: _expandController,
       curve: Curves.easeInOut,
     );
     _initializeTTS();
@@ -48,14 +57,12 @@ class _TTSPlayerWidgetState extends State<TTSPlayerWidget>
   @override
   void didUpdateWidget(covariant TTSPlayerWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // When the chapter changes (textToSpeak or title changes),
-    // stop current speech and auto-play the new chapter.
     if (oldWidget.textToSpeak != widget.textToSpeak && mounted) {
-      _handleChapterChanged();
+      _handleTextChanged();
     }
   }
 
-  Future<void> _handleChapterChanged() async {
+  Future<void> _handleTextChanged() async {
     final wasPlaying = _isPlaying;
     await _ttsService.stop();
     if (!mounted) return;
@@ -63,7 +70,6 @@ class _TTSPlayerWidgetState extends State<TTSPlayerWidget>
       _isPlaying = false;
       _isPaused = false;
     });
-    // Only auto-play if TTS was already playing before the chapter change
     if (wasPlaying &&
         widget.textToSpeak.isNotEmpty &&
         !_isLoading &&
@@ -76,7 +82,7 @@ class _TTSPlayerWidgetState extends State<TTSPlayerWidget>
           _isPaused = false;
         });
       } catch (e) {
-        debugPrint('Auto-play on chapter change failed: $e');
+        debugPrint('TTS auto-play failed: $e');
       }
     }
   }
@@ -84,7 +90,7 @@ class _TTSPlayerWidgetState extends State<TTSPlayerWidget>
   Future<void> _initializeTTS() async {
     if (!_hasAcquired) {
       _hasAcquired = true;
-      _ttsService.acquire(); // FIX #1: Reference count the singleton
+      _ttsService.acquire();
     }
     setState(() {
       _isLoading = true;
@@ -93,9 +99,7 @@ class _TTSPlayerWidgetState extends State<TTSPlayerWidget>
     });
 
     _ttsService.onVoicesLoaded = () {
-      if (mounted) {
-        setState(() => _isVoicesLoading = false);
-      }
+      if (mounted) setState(() => _isVoicesLoading = false);
     };
 
     _ttsService.onInitError = (error) {
@@ -138,7 +142,7 @@ class _TTSPlayerWidgetState extends State<TTSPlayerWidget>
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Audio error: $error'),
+            content: Text('TTS error: $error'),
             backgroundColor: Colors.red.shade700,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
@@ -149,19 +153,17 @@ class _TTSPlayerWidgetState extends State<TTSPlayerWidget>
       }
     };
 
-    if (mounted) {
-      setState(() => _isLoading = false);
-    }
+    if (mounted) setState(() => _isLoading = false);
   }
 
   @override
   void dispose() {
-    _animController.dispose();
+    _expandController.dispose();
     _ttsService.stop();
     _ttsService.clearCallbacks();
     if (_hasAcquired) {
       _hasAcquired = false;
-      _ttsService.release(); // FIX #1: Release reference on dispose
+      _ttsService.release();
     }
     super.dispose();
   }
@@ -169,13 +171,12 @@ class _TTSPlayerWidgetState extends State<TTSPlayerWidget>
   void _toggleExpanded() {
     setState(() {
       _isExpanded = !_isExpanded;
-      _isExpanded ? _animController.forward() : _animController.reverse();
+      _isExpanded ? _expandController.forward() : _expandController.reverse();
     });
   }
 
   Future<void> _togglePlayPause() async {
     if (_isLoading || _hasInitError) return;
-
     setState(() => _isLoading = true);
 
     try {
@@ -212,6 +213,19 @@ class _TTSPlayerWidgetState extends State<TTSPlayerWidget>
     }
   }
 
+  Future<void> _stop() async {
+    await _ttsService.stop();
+    setState(() {
+      _isPlaying = false;
+      _isPaused = false;
+    });
+
+    _stopCount++;
+    if (_stopCount % 2 == 0 && _interstitialAd != null && mounted) {
+      _interstitialAd!.show();
+    }
+  }
+
   void _loadInterstitialAd() {
     InterstitialAd.load(
       adUnitId: AdHelper.interstitialAdUnitId,
@@ -227,7 +241,7 @@ class _TTSPlayerWidgetState extends State<TTSPlayerWidget>
                 AppOpenAdManager.pauseAppOpenAd = false;
               });
               ad.dispose();
-              _loadInterstitialAd(); // Reload next ad
+              _loadInterstitialAd();
             },
             onAdFailedToShowFullScreenContent: (ad, error) {
               Future.delayed(const Duration(seconds: 1), () {
@@ -239,91 +253,33 @@ class _TTSPlayerWidgetState extends State<TTSPlayerWidget>
           );
           _interstitialAd = ad;
         },
-        onAdFailedToLoad: (err) {
-          debugPrint('TTS interstitial ad failed to load: ${err.message}');
-        },
+        onAdFailedToLoad: (err) =>
+            debugPrint('TTS interstitial failed: ${err.message}'),
       ),
     );
   }
 
-  Future<void> _stop() async {
-    await _ttsService.stop();
-    setState(() {
-      _isPlaying = false;
-      _isPaused = false;
-    });
-
-    // Show interstitial ad every 3rd stop
-    _stopCount++;
-    if (_stopCount % 2 == 0 && _interstitialAd != null && mounted) {
-      _interstitialAd!.show();
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    // Error state — show a retry button
-    if (_hasInitError) {
-      return Container(
-        decoration: BoxDecoration(
-          color: Colors.red.shade50.withValues(alpha: 0.95),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.red.shade300, width: 1),
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.error_outline, color: Colors.red.shade700, size: 18),
-            const SizedBox(width: 8),
-            Text(
-              'Audio unavailable',
-              style: TextStyle(
-                color: Colors.red.shade700,
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            const SizedBox(width: 8),
-            GestureDetector(
-              onTap: () {
-                setState(() => _hasInitError = false);
-                _initializeTTS();
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 4,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.red.shade700,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Text(
-                  'Retry',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
+    if (_hasInitError) return _buildErrorWidget();
 
     return AnimatedBuilder(
       animation: _expandAnimation,
       builder: (context, child) {
         return Container(
           decoration: BoxDecoration(
-            color: AppColors.dividerBrown.withValues(alpha: 0.95),
-            borderRadius: BorderRadius.circular(20),
+            gradient: LinearGradient(
+              colors: [
+                AppColors.palmLeafGreen,
+                AppColors.palmLeafGreen.withValues(alpha: 0.9),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(7),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.25),
+                color: AppColors.palmLeafGreen.withValues(alpha: 0.3),
                 blurRadius: 8,
                 offset: const Offset(0, 3),
               ),
@@ -332,109 +288,78 @@ class _TTSPlayerWidgetState extends State<TTSPlayerWidget>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Main player row
+              // Main controls row
               Padding(
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
+                  horizontal: 16,
+                  vertical: 8,
                 ),
                 child: Row(
-                  mainAxisSize: MainAxisSize.min,
                   children: [
                     // Play/Pause button
-                    GestureDetector(
-                      onTap: _togglePlayPause,
-                      child: Container(
-                        width: 38,
-                        height: 38,
-                        decoration: const BoxDecoration(
-                          color: AppColors.vintageInk,
-                          shape: BoxShape.circle,
-                        ),
-                        child: _isLoading
-                            ? const Padding(
-                                padding: EdgeInsets.all(8.0),
-                                child: CircularProgressIndicator(
-                                  color: Colors.white,
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : Icon(
-                                _isPlaying && !_isPaused
-                                    ? Icons.pause_rounded
-                                    : Icons.play_arrow_rounded,
+                    _buildPlayPauseButton(),
+                    const SizedBox(width: 12),
+
+                    // Title and status
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (widget.title != null && widget.title!.isNotEmpty)
+                            Text(
+                              widget.title!,
+                              style: const TextStyle(
                                 color: Colors.white,
-                                size: 24,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
                               ),
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                            ),
+                          const SizedBox(height: 2),
+                          Row(
+                            children: [
+                              Icon(
+                                _isPlaying
+                                    ? Icons.record_voice_over
+                                    : Icons.mic,
+                                color: Colors.white.withValues(alpha: 0.6),
+                                size: 12,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                _isPaused
+                                    ? 'Paused'
+                                    : _isPlaying
+                                    ? 'Reading...'
+                                    : 'Text-to-Speech',
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.6),
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
                     ),
 
+                    // Stop button
                     if (_isPlaying || _isPaused) ...[
                       const SizedBox(width: 8),
-                      // Stop button
-                      GestureDetector(
+                      _buildControlButton(
+                        icon: Icons.stop_rounded,
+                        color: Colors.red.shade600,
                         onTap: _stop,
-                        child: Container(
-                          width: 36,
-                          height: 36,
-                          decoration: BoxDecoration(
-                            color: Colors.red.shade700,
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.stop_rounded,
-                            color: Colors.white,
-                            size: 18,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      // Show chapter title or status
-                      Expanded(
-                        child: Text(
-                          (widget.title != null && widget.title!.isNotEmpty)
-                              ? widget.title!
-                              : (_isPaused ? 'Paused' : 'Playing...'),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1,
-                        ),
-                      ),
-                    ] else ...[
-                      const SizedBox(width: 8),
-                      Text(
-                        'Listen',
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.9),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                        ),
+                        size: 32,
                       ),
                     ],
 
                     const SizedBox(width: 8),
 
-                    // Settings toggle button
-                    GestureDetector(
-                      onTap: _toggleExpanded,
-                      child: Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.2),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          _isExpanded ? Icons.keyboard_arrow_up : Icons.tune,
-                          color: Colors.white,
-                          size: 18,
-                        ),
-                      ),
-                    ),
+                    // Settings toggle
+                    _buildSettingsButton(),
                   ],
                 ),
               ),
@@ -442,71 +367,181 @@ class _TTSPlayerWidgetState extends State<TTSPlayerWidget>
               // Expanded settings panel
               SizeTransition(
                 sizeFactor: _expandAnimation,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Speech Rate Slider
-                      _buildSliderRow(
-                        icon: Icons.speed,
-                        label: 'Speed',
-                        value: _ttsService.speechRate,
-                        min: 0.0,
-                        max: 1.0,
-                        onChanged: (val) async {
-                          await _ttsService.setSpeechRate(val);
-                          setState(() {});
-                        },
-                      ),
-
-                      const SizedBox(height: 8),
-
-                      // Pitch Slider
-                      _buildSliderRow(
-                        icon: Icons.graphic_eq,
-                        label: 'Pitch',
-                        value: _ttsService.pitch,
-                        min: 0.5,
-                        max: 2.0,
-                        onChanged: (val) async {
-                          await _ttsService.setPitch(val);
-                          setState(() {});
-                        },
-                      ),
-
-                      const SizedBox(height: 8),
-
-                      // Volume Slider
-                      _buildSliderRow(
-                        icon: Icons.volume_up,
-                        label: 'Volume',
-                        value: _ttsService.volume,
-                        min: 0.0,
-                        max: 1.0,
-                        onChanged: (val) async {
-                          await _ttsService.setVolume(val);
-                          setState(() {});
-                        },
-                      ),
-
-                      const SizedBox(height: 8),
-
-                      // Voice Selector — loading skeleton or actual selector
-                      if (_isVoicesLoading)
-                        _buildVoiceLoadingSkeleton()
-                      else if (_ttsService.availableVoices.isNotEmpty)
-                        _buildVoiceSelector()
-                      else
-                        _buildNoVoicesMessage(),
-                    ],
-                  ),
-                ),
+                child: _buildExpandedPanel(),
               ),
             ],
           ),
         );
       },
+    );
+  }
+
+  Widget _buildErrorWidget() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.red.shade50.withValues(alpha: 0.95),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.red.shade300, width: 1),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        children: [
+          Icon(Icons.error_outline, color: Colors.red.shade700, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'TTS unavailable',
+              style: TextStyle(
+                color: Colors.red.shade700,
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          GestureDetector(
+            onTap: () {
+              setState(() => _hasInitError = false);
+              _initializeTTS();
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.red.shade700,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Text(
+                'Retry',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPlayPauseButton() {
+    return GestureDetector(
+      onTap: _togglePlayPause,
+      child: Container(
+        width: 35,
+        height: 35,
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.2),
+          shape: BoxShape.circle,
+        ),
+        child: _isLoading
+            ? const Padding(
+                padding: EdgeInsets.all(12.0),
+                child: CircularProgressIndicator(
+                  color: Colors.white,
+                  strokeWidth: 2,
+                ),
+              )
+            : Icon(
+                _isPlaying && !_isPaused
+                    ? Icons.pause_rounded
+                    : Icons.play_arrow_rounded,
+                color: Colors.white,
+                size: 28,
+              ),
+      ),
+    );
+  }
+
+  Widget _buildControlButton({
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
+    double size = 36,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.9),
+          shape: BoxShape.circle,
+        ),
+        child: Icon(icon, color: Colors.white, size: size * 0.55),
+      ),
+    );
+  }
+
+  Widget _buildSettingsButton() {
+    return GestureDetector(
+      onTap: _toggleExpanded,
+      child: Container(
+        width: 34,
+        height: 34,
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.15),
+          shape: BoxShape.circle,
+        ),
+        child: Icon(
+          _isExpanded ? Icons.keyboard_arrow_up : Icons.tune,
+          color: Colors.white,
+          size: 18,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildExpandedPanel() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildSliderRow(
+            icon: Icons.speed,
+            label: 'Speed',
+            value: _ttsService.speechRate,
+            min: 0.0,
+            max: 1.0,
+            onChanged: (val) async {
+              await _ttsService.setSpeechRate(val);
+              setState(() {});
+            },
+          ),
+          const SizedBox(height: 8),
+          _buildSliderRow(
+            icon: Icons.graphic_eq,
+            label: 'Pitch',
+            value: _ttsService.pitch,
+            min: 0.5,
+            max: 2.0,
+            onChanged: (val) async {
+              await _ttsService.setPitch(val);
+              setState(() {});
+            },
+          ),
+          const SizedBox(height: 8),
+          _buildSliderRow(
+            icon: Icons.volume_up,
+            label: 'Volume',
+            value: _ttsService.volume,
+            min: 0.0,
+            max: 1.0,
+            onChanged: (val) async {
+              await _ttsService.setVolume(val);
+              setState(() {});
+            },
+          ),
+          const SizedBox(height: 8),
+          if (_isVoicesLoading)
+            _buildVoiceSkeleton()
+          else if (_ttsService.availableVoices.isNotEmpty)
+            _buildVoiceSelector()
+          else
+            _buildNoVoicesMessage(),
+        ],
+      ),
     );
   }
 
@@ -529,7 +564,7 @@ class _TTSPlayerWidgetState extends State<TTSPlayerWidget>
         Expanded(
           child: SliderTheme(
             data: SliderThemeData(
-              activeTrackColor: AppColors.vintageInk,
+              activeTrackColor: Colors.white,
               inactiveTrackColor: Colors.white24,
               thumbColor: Colors.white,
               overlayColor: Colors.white.withValues(alpha: 0.1),
@@ -552,12 +587,11 @@ class _TTSPlayerWidgetState extends State<TTSPlayerWidget>
     );
   }
 
-  /// Skeleton shimmer shown while voices are loading
-  Widget _buildVoiceLoadingSkeleton() {
+  Widget _buildVoiceSkeleton() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.15),
+        color: Colors.white.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
@@ -573,18 +607,14 @@ class _TTSPlayerWidgetState extends State<TTSPlayerWidget>
                   style: TextStyle(color: Colors.white60, fontSize: 11),
                 ),
                 const SizedBox(height: 6),
-                // Animated skeleton bar
-                _ShimmerSkeleton(),
+                Container(
+                  height: 8,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(4),
+                    color: Colors.white.withValues(alpha: 0.1),
+                  ),
+                ),
               ],
-            ),
-          ),
-          const SizedBox(width: 6),
-          const SizedBox(
-            width: 14,
-            height: 14,
-            child: CircularProgressIndicator(
-              color: Colors.white54,
-              strokeWidth: 1.5,
             ),
           ),
         ],
@@ -596,7 +626,7 @@ class _TTSPlayerWidgetState extends State<TTSPlayerWidget>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.15),
+        color: Colors.white.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
@@ -611,7 +641,7 @@ class _TTSPlayerWidgetState extends State<TTSPlayerWidget>
                 value: _ttsService.currentVoice.isNotEmpty
                     ? _ttsService.currentVoice
                     : null,
-                dropdownColor: AppColors.dividerBrown,
+                dropdownColor: AppColors.palmLeafGreen,
                 style: const TextStyle(color: Colors.white, fontSize: 11),
                 icon: const Icon(
                   Icons.arrow_drop_down,
@@ -645,12 +675,11 @@ class _TTSPlayerWidgetState extends State<TTSPlayerWidget>
     );
   }
 
-  /// Shown when no Tamil voices are found
   Widget _buildNoVoicesMessage() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.1),
+        color: Colors.white.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(10),
       ),
       child: const Row(
@@ -665,59 +694,6 @@ class _TTSPlayerWidgetState extends State<TTSPlayerWidget>
           ),
         ],
       ),
-    );
-  }
-}
-
-/// A small animated skeleton bar used as a loading placeholder
-class _ShimmerSkeleton extends StatefulWidget {
-  @override
-  State<_ShimmerSkeleton> createState() => _ShimmerSkeletonState();
-}
-
-class _ShimmerSkeletonState extends State<_ShimmerSkeleton>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _shimmerController;
-
-  @override
-  void initState() {
-    super.initState();
-    _shimmerController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1200),
-    )..repeat();
-  }
-
-  @override
-  void dispose() {
-    _shimmerController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _shimmerController,
-      builder: (context, child) {
-        return Container(
-          height: 8,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(4),
-            gradient: LinearGradient(
-              colors: [
-                Colors.white.withValues(alpha: 0.05),
-                Colors.white.withValues(alpha: 0.25),
-                Colors.white.withValues(alpha: 0.05),
-              ],
-              stops: [
-                (_shimmerController.value - 0.3).clamp(0.0, 1.0),
-                _shimmerController.value,
-                (_shimmerController.value + 0.3).clamp(0.0, 1.0),
-              ],
-            ),
-          ),
-        );
-      },
     );
   }
 }
