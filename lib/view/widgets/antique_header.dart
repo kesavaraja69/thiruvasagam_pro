@@ -22,22 +22,25 @@ class AntiqueHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // In landscape on tablets, use a compact header to save vertical space
+    final headerHeight = Responsive.isTabletLandscape(context)
+        ? Responsive.compactHeight(context, height)
+        : Responsive.height(context, height);
+
     return Container(
       width: double.infinity,
-      height: height,
+      height: headerHeight,
       decoration: const BoxDecoration(
         color: AppColors.transparent,
         image: DecorationImage(
           image: AssetImage(AppAssets.topBarPaper),
-          // Changed to 'cover' so the paper texture never looks stretched or squished
           fit: BoxFit.fill,
         ),
       ),
-      // Cleaned up the unnecessary Stack widget!
       child: Align(
         alignment: Alignment.topCenter,
         child: Padding(
-          padding: const EdgeInsets.only(top: 5.0),
+          padding: EdgeInsets.only(top: Responsive.padding(context, 5)),
           child: Text(
             title,
             style: ResponsiveText.chapterTitle(
@@ -45,6 +48,8 @@ class AntiqueHeader extends StatelessWidget {
               userScale: userScale,
               fontFamily: fontFamily,
             ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ),
       ),

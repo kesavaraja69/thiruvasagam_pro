@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:thiruvasagampro/services/audio_cache_service.dart';
 import 'package:thiruvasagampro/utils/app_assets.dart';
 import 'package:thiruvasagampro/utils/app_colors.dart';
+import 'package:thiruvasagampro/utils/responsive_theme.dart';
 import 'package:thiruvasagampro/view/screens/about_screen.dart';
 import 'package:thiruvasagampro/view/widgets/antique_header.dart';
 import 'package:thiruvasagampro/view/widgets/custom_banner_ad.dart';
@@ -34,18 +35,24 @@ class SettingsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.transparent,
-      body: ListView(
-        padding: const EdgeInsets.only(bottom: 100),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: Responsive.readingMaxWidth(context),
+          ),
+        child: ListView(
+        padding: EdgeInsets.only(bottom: Responsive.padding(context, 100)),
         children: [
           AntiqueHeader(title: 'அமைப்புகள் (Settings)'),
 
           // ===== READ MODE SECTION =====
-          _buildSectionHeader('📖 படிப்பு முறை (Read Mode)'),
+          _buildSectionHeader(context, '📖 படிப்பு முறை (Read Mode)'),
 
           // Eye Protection Toggle
           Consumer<ReadingProvider>(
             builder: (context, provider, child) {
               return _buildSwitchItem(
+                context: context,
                 icon: Icons.remove_red_eye_outlined,
                 title: 'கண் பாதுகாப்பு (Eye Protection)',
                 subtitle: provider.eyeProtectionEnabled ? 'ON' : 'OFF',
@@ -54,16 +61,18 @@ class SettingsScreen extends StatelessWidget {
               );
             },
           ),
-          _buildDivider(),
+          _buildDivider(context),
 
           // Warmth & Dimness sliders (only when eye protection is enabled)
           Consumer<ReadingProvider>(
             builder: (context, provider, child) {
-              if (!provider.eyeProtectionEnabled) return const SizedBox.shrink();
+              if (!provider.eyeProtectionEnabled)
+                return const SizedBox.shrink();
               return Column(
                 children: [
                   // Warmth slider
                   _buildSliderItem(
+                    context: context,
                     icon: Icons.wb_sunny_outlined,
                     title: 'வெப்பம் (Warmth)',
                     value: provider.eyeWarmth,
@@ -71,10 +80,11 @@ class SettingsScreen extends StatelessWidget {
                     max: 1.0,
                     onChanged: (val) => provider.setEyeWarmth(val),
                   ),
-                  _buildDivider(),
+                  _buildDivider(context),
 
                   // Dimness slider
                   _buildSliderItem(
+                    context: context,
                     icon: Icons.brightness_low_outlined,
                     title: 'மங்கல் (Dimness)',
                     value: provider.eyeDimness,
@@ -82,16 +92,17 @@ class SettingsScreen extends StatelessWidget {
                     max: 0.6,
                     onChanged: (val) => provider.setEyeDimness(val),
                   ),
-                  _buildDivider(),
+                  _buildDivider(context),
                 ],
               );
             },
           ),
 
           // ===== GENERAL SECTION =====
-          _buildSectionHeader('📋 பொது (General)'),
+          _buildSectionHeader(context, '📋 பொது (General)'),
 
           _buildSettingsItem(
+            context: context,
             icon: Icons.info_outline,
             title: 'எங்களை பற்றி (About)',
             onTap: () => Navigator.push(
@@ -99,58 +110,58 @@ class SettingsScreen extends StatelessWidget {
               MaterialPageRoute(builder: (context) => const AboutScreen()),
             ),
           ),
-          _buildDivider(),
+          _buildDivider(context),
 
           _buildSettingsItem(
+            context: context,
             icon: Icons.privacy_tip_outlined,
             title: 'தனியுரிமைக் கொள்கை (Privacy Policy)',
             onTap: () => _launchURL(
               'https://doc-hosting.flycricket.io/thiruvasagam-pro-privacy-policies/d92f049d-6945-49af-8daf-1b06db75bfdf/privacy',
             ),
           ),
-          _buildDivider(),
+          _buildDivider(context),
 
           _buildSettingsItem(
+            context: context,
             icon: Icons.description_outlined,
             title: 'விதிமுறைகள் (Terms & Conditions)',
             onTap: () => _launchURL(
               'https://doc-hosting.flycricket.io/thiruvasagam-pro-terms-and-conditions/04b14714-6a57-4070-a967-1c0870400a96/terms',
             ),
           ),
-          _buildDivider(),
+          _buildDivider(context),
 
           _buildSettingsItem(
+            context: context,
             icon: Icons.mail_outline,
             title: 'தொடர்புக்கு (Contact Us)',
             onTap: _launchEmail,
           ),
-          _buildDivider(),
+          _buildDivider(context),
 
-          // ===== AUDIO CACHE SECTION =====
-          _buildSectionHeader('🎵 ஆடியோ கேச் (Audio Cache)'),
-
-          _buildSettingsItem(
-            icon: Icons.cleaning_services_outlined,
-            title: 'கேசை அழி (Clear Audio Cache)',
-            onTap: () => _showClearCacheDialog(context),
-          ),
-          _buildDivider(),
-
-          const SizedBox(height: 30),
+          SizedBox(height: Responsive.height(context, 15)),
           const CustomBannerAd(),
-          const SizedBox(height: 6),
+          SizedBox(height: Responsive.height(context, 6)),
         ],
+      ),
+        ),
       ),
     );
   }
 
-  Widget _buildSectionHeader(String title) {
+  Widget _buildSectionHeader(BuildContext context, String title) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+      padding: EdgeInsets.fromLTRB(
+        Responsive.padding(context, 16),
+        Responsive.padding(context, 16),
+        Responsive.padding(context, 16),
+        Responsive.padding(context, 4),
+      ),
       child: Text(
         title,
         style: TextStyle(
-          fontSize: 14,
+          fontSize: Responsive.fontSize(context, 14),
           fontWeight: FontWeight.bold,
           color: AppColors.vintageInk.withValues(alpha: 0.7),
           letterSpacing: 0.5,
@@ -160,26 +171,33 @@ class SettingsScreen extends StatelessWidget {
   }
 
   Widget _buildSettingsItem({
+    required BuildContext context,
     required IconData icon,
     required String title,
     required VoidCallback onTap,
   }) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8.0),
+      padding: EdgeInsets.symmetric(
+        horizontal: Responsive.padding(context, 8),
+      ),
       child: ListTile(
-        leading: Icon(icon, color: AppColors.vintageInk, size: 28),
+        leading: Icon(
+          icon,
+          color: AppColors.vintageInk,
+          size: Responsive.iconSize(context, 26),
+        ),
         title: Text(
           title,
-          style: const TextStyle(
-            fontSize: 18,
+          style: TextStyle(
+            fontSize: Responsive.fontSize(context, 16),
             fontWeight: FontWeight.w600,
             color: Colors.black87,
           ),
         ),
-        trailing: const Icon(
+        trailing: Icon(
           Icons.arrow_forward_ios,
           color: Colors.black45,
-          size: 18,
+          size: Responsive.iconSize(context, 16),
         ),
         onTap: onTap,
       ),
@@ -187,6 +205,7 @@ class SettingsScreen extends StatelessWidget {
   }
 
   Widget _buildSwitchItem({
+    required BuildContext context,
     required IconData icon,
     required String title,
     required String subtitle,
@@ -194,13 +213,19 @@ class SettingsScreen extends StatelessWidget {
     required ValueChanged<bool> onChanged,
   }) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8.0),
+      padding: EdgeInsets.symmetric(
+        horizontal: Responsive.padding(context, 8),
+      ),
       child: ListTile(
-        leading: Icon(icon, color: AppColors.vintageInk, size: 28),
+        leading: Icon(
+          icon,
+          color: AppColors.vintageInk,
+          size: Responsive.iconSize(context, 26),
+        ),
         title: Text(
           title,
-          style: const TextStyle(
-            fontSize: 18,
+          style: TextStyle(
+            fontSize: Responsive.fontSize(context, 16),
             fontWeight: FontWeight.w600,
             color: Colors.black87,
           ),
@@ -208,7 +233,7 @@ class SettingsScreen extends StatelessWidget {
         subtitle: Text(
           subtitle,
           style: TextStyle(
-            fontSize: 13,
+            fontSize: Responsive.fontSize(context, 12),
             color: value ? Colors.green.shade700 : Colors.black38,
             fontWeight: FontWeight.w500,
           ),
@@ -223,6 +248,7 @@ class SettingsScreen extends StatelessWidget {
   }
 
   Widget _buildSliderItem({
+    required BuildContext context,
     required IconData icon,
     required String title,
     required double value,
@@ -231,26 +257,33 @@ class SettingsScreen extends StatelessWidget {
     required ValueChanged<double> onChanged,
   }) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      padding: EdgeInsets.symmetric(
+        horizontal: Responsive.padding(context, 16),
+      ),
       child: Column(
         children: [
           Row(
             children: [
-              Icon(icon, color: AppColors.vintageInk, size: 24),
-              const SizedBox(width: 12),
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                  color: Colors.black87,
+              Icon(
+                icon,
+                color: AppColors.vintageInk,
+                size: Responsive.iconSize(context, 22),
+              ),
+              SizedBox(width: Responsive.padding(context, 12)),
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: Responsive.fontSize(context, 14),
+                    fontWeight: FontWeight.w500,
+                    color: Colors.black87,
+                  ),
                 ),
               ),
-              const Spacer(),
               Text(
                 '${(value * 100).round()}%',
                 style: TextStyle(
-                  fontSize: 14,
+                  fontSize: Responsive.fontSize(context, 12),
                   fontWeight: FontWeight.bold,
                   color: AppColors.vintageInk,
                 ),
@@ -276,12 +309,15 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildDivider() {
+  Widget _buildDivider(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 25.0),
+      padding: EdgeInsets.symmetric(
+        vertical: Responsive.padding(context, 4),
+        horizontal: Responsive.padding(context, 25),
+      ),
       child: Image.asset(
         AppAssets.templeDivider,
-        height: 15,
+        height: Responsive.dim(context, 13),
         fit: BoxFit.contain,
       ),
     );
@@ -291,20 +327,36 @@ class SettingsScreen extends StatelessWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Clear Audio Cache?'),
-        content: const Text(
+        title: Text(
+          'Clear Audio Cache?',
+          style: TextStyle(
+            fontSize: Responsive.fontSize(context, 18),
+          ),
+        ),
+        content: Text(
           'This will remove all cached audio files. You will need to download them again when offline.',
+          style: TextStyle(
+            fontSize: Responsive.fontSize(context, 14),
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: Text(
+              'Cancel',
+              style: TextStyle(
+                fontSize: Responsive.fontSize(context, 14),
+              ),
+            ),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text(
+            child: Text(
               'Clear',
-              style: TextStyle(color: Colors.red),
+              style: TextStyle(
+                color: Colors.red,
+                fontSize: Responsive.fontSize(context, 14),
+              ),
             ),
           ),
         ],

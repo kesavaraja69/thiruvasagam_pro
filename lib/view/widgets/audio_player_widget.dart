@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:thiruvasagampro/utils/ad_helper.dart';
 import 'package:thiruvasagampro/utils/app_colors.dart';
 import 'package:thiruvasagampro/utils/app_open_ad_manager.dart';
+import 'package:thiruvasagampro/utils/responsive_theme.dart';
 
 String _formatDuration(Duration d) {
   if (d.inHours > 0) {
@@ -292,12 +293,12 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(7),
+        borderRadius: BorderRadius.circular(Responsive.radius(context, 7)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.2),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
+            blurRadius: Responsive.dim(context, 8),
+            offset: Offset(0, Responsive.dim(context, 3)),
           ),
         ],
       ),
@@ -305,11 +306,14 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: EdgeInsets.symmetric(
+              horizontal: Responsive.padding(context, 16),
+              vertical: Responsive.padding(context, 12),
+            ),
             child: Row(
               children: [
                 _buildPlayPauseButton(),
-                const SizedBox(width: 12),
+                SizedBox(width: Responsive.padding(context, 12)),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -318,26 +322,26 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
                       if (widget.title != null && widget.title!.isNotEmpty)
                         Text(
                           widget.title!,
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: Colors.white,
-                            fontSize: 14,
+                            fontSize: Responsive.fontSize(context, 13),
                             fontWeight: FontWeight.w600,
                           ),
                           overflow: TextOverflow.ellipsis,
                           maxLines: 1,
                         ),
-                      const SizedBox(height: 2),
+                      SizedBox(height: Responsive.height(context, 2)),
                       _buildStatusRow(),
                     ],
                   ),
                 ),
                 if (_isPlaying || _isReady) ...[
-                  const SizedBox(width: 8),
+                  SizedBox(width: Responsive.padding(context, 8)),
                   _buildControlButton(
                     icon: Icons.stop_rounded,
                     color: Colors.red.shade600,
                     onTap: _stop,
-                    size: 40,
+                    size: Responsive.dim(context, 36),
                   ),
                 ],
               ],
@@ -347,7 +351,7 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
             _buildProgressBar(),
           if (_isPlaying || _isReady)
             Padding(
-              padding: const EdgeInsets.only(bottom: 8),
+              padding: EdgeInsets.only(bottom: Responsive.padding(context, 8)),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -355,7 +359,7 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
                     icon: Icons.replay_10_rounded,
                     onTap: _skipBackward,
                   ),
-                  const SizedBox(width: 40),
+                  SizedBox(width: Responsive.padding(context, 40)),
                   _buildSkipButton(
                     icon: Icons.forward_10_rounded,
                     onTap: _skipForward,
@@ -375,16 +379,16 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
         onTap: _togglePlayPause,
         customBorder: const CircleBorder(),
         child: Container(
-          width: 35,
-          height: 35,
+          width: Responsive.dim(context, 32),
+          height: Responsive.dim(context, 32),
           decoration: BoxDecoration(
             color: AppColors.vintageInk,
             shape: BoxShape.circle,
             boxShadow: [
               BoxShadow(
                 color: AppColors.vintageInk.withValues(alpha: 0.4),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
+                blurRadius: Responsive.dim(context, 8),
+                offset: Offset(0, Responsive.dim(context, 2)),
               ),
             ],
           ),
@@ -396,18 +400,25 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
 
   Widget _buildPlayPauseIcon() {
     if (_hasError) {
-      return const Icon(Icons.error_outline, color: Colors.white, size: 26);
+      return Icon(
+        Icons.error_outline,
+        color: Colors.white,
+        size: Responsive.iconSize(context, 22),
+      );
     }
     if (_isBuffering && !_isReady) {
-      return const Padding(
-        padding: EdgeInsets.all(13.0),
-        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
+      return Padding(
+        padding: EdgeInsets.all(Responsive.padding(context, 11)),
+        child: CircularProgressIndicator(
+          color: Colors.white,
+          strokeWidth: 2.5,
+        ),
       );
     }
     return Icon(
       _isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
       color: Colors.white,
-      size: 30,
+      size: Responsive.iconSize(context, 26),
     );
   }
 
@@ -442,27 +453,27 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
       children: [
         if (_isBuffering && !_isReady) ...[
           SizedBox(
-            width: 12,
-            height: 12,
+            width: Responsive.dim(context, 10),
+            height: Responsive.dim(context, 10),
             child: CircularProgressIndicator(
               color: Colors.white.withValues(alpha: 0.7),
               strokeWidth: 1.5,
             ),
           ),
-          const SizedBox(width: 4),
+          SizedBox(width: Responsive.padding(context, 4)),
         ] else if (statusIcon != null) ...[
           Icon(
             statusIcon,
             color: Colors.white.withValues(alpha: 0.7),
-            size: 12,
+            size: Responsive.iconSize(context, 10),
           ),
-          const SizedBox(width: 4),
+          SizedBox(width: Responsive.padding(context, 4)),
         ],
         Text(
           statusText,
           style: TextStyle(
             color: Colors.white.withValues(alpha: 0.8),
-            fontSize: 12,
+            fontSize: Responsive.fontSize(context, 11),
             fontWeight: FontWeight.w500,
           ),
         ),
@@ -476,7 +487,12 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
         : 0.0;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+      padding: EdgeInsets.fromLTRB(
+        Responsive.padding(context, 16),
+        0,
+        Responsive.padding(context, 16),
+        Responsive.padding(context, 4),
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -489,9 +505,9 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
               if (box != null) {
                 final dx = details.localPosition.dx.clamp(
                   0.0,
-                  box.size.width - 32,
+                  box.size.width - Responsive.padding(context, 32),
                 );
-                final newProgress = dx / (box.size.width - 32);
+                final newProgress = dx / (box.size.width - Responsive.padding(context, 32));
                 setState(() {
                   _currentPosition = Duration(
                     milliseconds: (newProgress * _totalDuration.inMilliseconds)
@@ -505,8 +521,10 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
               _seekTo(_currentPosition);
             },
             child: Container(
-              height: 24,
-              padding: const EdgeInsets.symmetric(vertical: 8),
+              height: Responsive.height(context, 22),
+              padding: EdgeInsets.symmetric(
+                vertical: Responsive.padding(context, 8),
+              ),
               child: LayoutBuilder(
                 builder: (context, constraints) {
                   final barWidth = constraints.maxWidth;
@@ -516,15 +534,17 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
                     alignment: Alignment.centerLeft,
                     children: [
                       Container(
-                        height: 4,
+                        height: Responsive.dim(context, 4),
                         decoration: BoxDecoration(
                           color: Colors.white.withValues(alpha: 0.2),
-                          borderRadius: BorderRadius.circular(2),
+                          borderRadius: BorderRadius.circular(
+                            Responsive.radius(context, 2),
+                          ),
                         ),
                       ),
                       Container(
                         width: fillWidth,
-                        height: 4,
+                        height: Responsive.dim(context, 4),
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
                             colors: [
@@ -532,22 +552,24 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
                               AppColors.vintageInk.withValues(alpha: 0.8),
                             ],
                           ),
-                          borderRadius: BorderRadius.circular(2),
+                          borderRadius: BorderRadius.circular(
+                            Responsive.radius(context, 2),
+                          ),
                         ),
                       ),
                       Positioned(
-                        left: fillWidth - 6,
+                        left: fillWidth - Responsive.dim(context, 6),
                         child: Container(
-                          width: 12,
-                          height: 12,
+                          width: Responsive.dim(context, 12),
+                          height: Responsive.dim(context, 12),
                           decoration: BoxDecoration(
                             color: Colors.white,
                             shape: BoxShape.circle,
                             boxShadow: [
                               BoxShadow(
                                 color: Colors.black.withValues(alpha: 0.3),
-                                blurRadius: 4,
-                                offset: const Offset(0, 1),
+                                blurRadius: Responsive.dim(context, 4),
+                                offset: Offset(0, Responsive.dim(context, 1)),
                               ),
                             ],
                           ),
@@ -560,7 +582,9 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
+            padding: EdgeInsets.symmetric(
+              horizontal: Responsive.padding(context, 4),
+            ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -568,7 +592,7 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
                   _formatDuration(_currentPosition),
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.7),
-                    fontSize: 11,
+                    fontSize: Responsive.fontSize(context, 10),
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -576,7 +600,7 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
                   _formatDuration(_totalDuration),
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.7),
-                    fontSize: 11,
+                    fontSize: Responsive.fontSize(context, 10),
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -608,12 +632,16 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
             boxShadow: [
               BoxShadow(
                 color: color.withValues(alpha: 0.3),
-                blurRadius: 4,
-                offset: const Offset(0, 1),
+                blurRadius: Responsive.dim(context, 4),
+                offset: Offset(0, Responsive.dim(context, 1)),
               ),
             ],
           ),
-          child: Icon(icon, color: Colors.white, size: size * 0.55),
+          child: Icon(
+            icon,
+            color: Colors.white,
+            size: size * 0.55,
+          ),
         ),
       ),
     );
@@ -629,13 +657,17 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
         onTap: onTap,
         customBorder: const CircleBorder(),
         child: Container(
-          width: 36,
-          height: 36,
+          width: Responsive.dim(context, 32),
+          height: Responsive.dim(context, 32),
           decoration: BoxDecoration(
             color: Colors.white.withValues(alpha: 0.15),
             shape: BoxShape.circle,
           ),
-          child: Icon(icon, color: Colors.white, size: 20),
+          child: Icon(
+            icon,
+            color: Colors.white,
+            size: Responsive.iconSize(context, 18),
+          ),
         ),
       ),
     );

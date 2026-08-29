@@ -5,6 +5,7 @@ import 'package:thiruvasagampro/services/tts_service.dart';
 import 'package:thiruvasagampro/utils/ad_helper.dart';
 import 'package:thiruvasagampro/utils/app_colors.dart';
 import 'package:thiruvasagampro/utils/app_open_ad_manager.dart';
+import 'package:thiruvasagampro/utils/responsive_theme.dart';
 
 /// A production-quality TTS player widget for text-to-speech playback.
 /// Features: Play/Pause, Stop, Voice selection, Speed/Pitch/Volume controls.
@@ -276,12 +277,12 @@ class _TTSPlayerWidgetState extends State<TTSPlayerWidget>
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
-            borderRadius: BorderRadius.circular(7),
+            borderRadius: BorderRadius.circular(Responsive.radius(context, 7)),
             boxShadow: [
               BoxShadow(
                 color: AppColors.palmLeafGreen.withValues(alpha: 0.3),
-                blurRadius: 8,
-                offset: const Offset(0, 3),
+                blurRadius: Responsive.dim(context, 8),
+                offset: Offset(0, Responsive.dim(context, 3)),
               ),
             ],
           ),
@@ -290,15 +291,15 @@ class _TTSPlayerWidgetState extends State<TTSPlayerWidget>
             children: [
               // Main controls row
               Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
+                padding: EdgeInsets.symmetric(
+                  horizontal: Responsive.padding(context, 16),
+                  vertical: Responsive.padding(context, 8),
                 ),
                 child: Row(
                   children: [
                     // Play/Pause button
                     _buildPlayPauseButton(),
-                    const SizedBox(width: 12),
+                    SizedBox(width: Responsive.padding(context, 12)),
 
                     // Title and status
                     Expanded(
@@ -309,15 +310,15 @@ class _TTSPlayerWidgetState extends State<TTSPlayerWidget>
                           if (widget.title != null && widget.title!.isNotEmpty)
                             Text(
                               widget.title!,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 color: Colors.white,
-                                fontSize: 14,
+                                fontSize: Responsive.fontSize(context, 13),
                                 fontWeight: FontWeight.w600,
                               ),
                               overflow: TextOverflow.ellipsis,
                               maxLines: 1,
                             ),
-                          const SizedBox(height: 2),
+                          SizedBox(height: Responsive.height(context, 2)),
                           Row(
                             children: [
                               Icon(
@@ -325,9 +326,9 @@ class _TTSPlayerWidgetState extends State<TTSPlayerWidget>
                                     ? Icons.record_voice_over
                                     : Icons.mic,
                                 color: Colors.white.withValues(alpha: 0.6),
-                                size: 12,
+                                size: Responsive.iconSize(context, 10),
                               ),
-                              const SizedBox(width: 4),
+                              SizedBox(width: Responsive.padding(context, 4)),
                               Text(
                                 _isPaused
                                     ? 'Paused'
@@ -336,7 +337,7 @@ class _TTSPlayerWidgetState extends State<TTSPlayerWidget>
                                     : 'Text-to-Speech',
                                 style: TextStyle(
                                   color: Colors.white.withValues(alpha: 0.6),
-                                  fontSize: 11,
+                                  fontSize: Responsive.fontSize(context, 10),
                                 ),
                               ),
                             ],
@@ -347,16 +348,16 @@ class _TTSPlayerWidgetState extends State<TTSPlayerWidget>
 
                     // Stop button
                     if (_isPlaying || _isPaused) ...[
-                      const SizedBox(width: 8),
+                      SizedBox(width: Responsive.padding(context, 8)),
                       _buildControlButton(
                         icon: Icons.stop_rounded,
                         color: Colors.red.shade600,
                         onTap: _stop,
-                        size: 32,
+                        size: Responsive.dim(context, 28),
                       ),
                     ],
 
-                    const SizedBox(width: 8),
+                    SizedBox(width: Responsive.padding(context, 8)),
 
                     // Settings toggle
                     _buildSettingsButton(),
@@ -380,20 +381,27 @@ class _TTSPlayerWidgetState extends State<TTSPlayerWidget>
     return Container(
       decoration: BoxDecoration(
         color: Colors.red.shade50.withValues(alpha: 0.95),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(Responsive.radius(context, 16)),
         border: Border.all(color: Colors.red.shade300, width: 1),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: EdgeInsets.symmetric(
+        horizontal: Responsive.padding(context, 16),
+        vertical: Responsive.padding(context, 12),
+      ),
       child: Row(
         children: [
-          Icon(Icons.error_outline, color: Colors.red.shade700, size: 20),
-          const SizedBox(width: 10),
+          Icon(
+            Icons.error_outline,
+            color: Colors.red.shade700,
+            size: Responsive.iconSize(context, 20),
+          ),
+          SizedBox(width: Responsive.padding(context, 10)),
           Expanded(
             child: Text(
               'TTS unavailable',
               style: TextStyle(
                 color: Colors.red.shade700,
-                fontSize: 13,
+                fontSize: Responsive.fontSize(context, 13),
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -404,16 +412,21 @@ class _TTSPlayerWidgetState extends State<TTSPlayerWidget>
               _initializeTTS();
             },
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              padding: EdgeInsets.symmetric(
+                horizontal: Responsive.padding(context, 12),
+                vertical: Responsive.padding(context, 6),
+              ),
               decoration: BoxDecoration(
                 color: Colors.red.shade700,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(
+                  Responsive.radius(context, 12),
+                ),
               ),
-              child: const Text(
+              child: Text(
                 'Retry',
                 style: TextStyle(
                   color: Colors.white,
-                  fontSize: 12,
+                  fontSize: Responsive.fontSize(context, 12),
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -428,15 +441,15 @@ class _TTSPlayerWidgetState extends State<TTSPlayerWidget>
     return GestureDetector(
       onTap: _togglePlayPause,
       child: Container(
-        width: 35,
-        height: 35,
+        width: Responsive.dim(context, 32),
+        height: Responsive.dim(context, 32),
         decoration: BoxDecoration(
           color: Colors.white.withValues(alpha: 0.2),
           shape: BoxShape.circle,
         ),
         child: _isLoading
-            ? const Padding(
-                padding: EdgeInsets.all(12.0),
+            ? Padding(
+                padding: EdgeInsets.all(Responsive.padding(context, 11)),
                 child: CircularProgressIndicator(
                   color: Colors.white,
                   strokeWidth: 2,
@@ -447,7 +460,7 @@ class _TTSPlayerWidgetState extends State<TTSPlayerWidget>
                     ? Icons.pause_rounded
                     : Icons.play_arrow_rounded,
                 color: Colors.white,
-                size: 28,
+                size: Responsive.iconSize(context, 24),
               ),
       ),
     );
@@ -468,7 +481,11 @@ class _TTSPlayerWidgetState extends State<TTSPlayerWidget>
           color: color.withValues(alpha: 0.9),
           shape: BoxShape.circle,
         ),
-        child: Icon(icon, color: Colors.white, size: size * 0.55),
+        child: Icon(
+          icon,
+          color: Colors.white,
+          size: size * 0.55,
+        ),
       ),
     );
   }
@@ -477,8 +494,8 @@ class _TTSPlayerWidgetState extends State<TTSPlayerWidget>
     return GestureDetector(
       onTap: _toggleExpanded,
       child: Container(
-        width: 34,
-        height: 34,
+        width: Responsive.dim(context, 30),
+        height: Responsive.dim(context, 30),
         decoration: BoxDecoration(
           color: Colors.white.withValues(alpha: 0.15),
           shape: BoxShape.circle,
@@ -486,7 +503,7 @@ class _TTSPlayerWidgetState extends State<TTSPlayerWidget>
         child: Icon(
           _isExpanded ? Icons.keyboard_arrow_up : Icons.tune,
           color: Colors.white,
-          size: 18,
+          size: Responsive.iconSize(context, 16),
         ),
       ),
     );
@@ -494,7 +511,12 @@ class _TTSPlayerWidgetState extends State<TTSPlayerWidget>
 
   Widget _buildExpandedPanel() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      padding: EdgeInsets.fromLTRB(
+        Responsive.padding(context, 16),
+        0,
+        Responsive.padding(context, 16),
+        Responsive.padding(context, 12),
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -509,7 +531,7 @@ class _TTSPlayerWidgetState extends State<TTSPlayerWidget>
               setState(() {});
             },
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: Responsive.height(context, 8)),
           _buildSliderRow(
             icon: Icons.graphic_eq,
             label: 'Pitch',
@@ -521,7 +543,7 @@ class _TTSPlayerWidgetState extends State<TTSPlayerWidget>
               setState(() {});
             },
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: Responsive.height(context, 8)),
           _buildSliderRow(
             icon: Icons.volume_up,
             label: 'Volume',
@@ -533,7 +555,7 @@ class _TTSPlayerWidgetState extends State<TTSPlayerWidget>
               setState(() {});
             },
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: Responsive.height(context, 8)),
           if (_isVoicesLoading)
             _buildVoiceSkeleton()
           else if (_ttsService.availableVoices.isNotEmpty)
@@ -555,11 +577,18 @@ class _TTSPlayerWidgetState extends State<TTSPlayerWidget>
   }) {
     return Row(
       children: [
-        Icon(icon, color: Colors.white70, size: 16),
-        const SizedBox(width: 6),
+        Icon(
+          icon,
+          color: Colors.white70,
+          size: Responsive.iconSize(context, 14),
+        ),
+        SizedBox(width: Responsive.padding(context, 6)),
         Text(
           label,
-          style: const TextStyle(color: Colors.white70, fontSize: 11),
+          style: TextStyle(
+            color: Colors.white70,
+            fontSize: Responsive.fontSize(context, 10),
+          ),
         ),
         Expanded(
           child: SliderTheme(
@@ -581,7 +610,10 @@ class _TTSPlayerWidgetState extends State<TTSPlayerWidget>
         ),
         Text(
           value.toStringAsFixed(1),
-          style: const TextStyle(color: Colors.white, fontSize: 11),
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: Responsive.fontSize(context, 10),
+          ),
         ),
       ],
     );
@@ -589,28 +621,40 @@ class _TTSPlayerWidgetState extends State<TTSPlayerWidget>
 
   Widget _buildVoiceSkeleton() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      padding: EdgeInsets.symmetric(
+        horizontal: Responsive.padding(context, 8),
+        vertical: Responsive.padding(context, 8),
+      ),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(Responsive.radius(context, 10)),
       ),
       child: Row(
         children: [
-          const Icon(Icons.record_voice_over, color: Colors.white70, size: 16),
-          const SizedBox(width: 6),
+          Icon(
+            Icons.record_voice_over,
+            color: Colors.white70,
+            size: Responsive.iconSize(context, 14),
+          ),
+          SizedBox(width: Responsive.padding(context, 6)),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'Loading voices...',
-                  style: TextStyle(color: Colors.white60, fontSize: 11),
+                  style: TextStyle(
+                    color: Colors.white60,
+                    fontSize: Responsive.fontSize(context, 10),
+                  ),
                 ),
-                const SizedBox(height: 6),
+                SizedBox(height: Responsive.height(context, 6)),
                 Container(
-                  height: 8,
+                  height: Responsive.dim(context, 8),
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(4),
+                    borderRadius: BorderRadius.circular(
+                      Responsive.radius(context, 4),
+                    ),
                     color: Colors.white.withValues(alpha: 0.1),
                   ),
                 ),
@@ -624,15 +668,22 @@ class _TTSPlayerWidgetState extends State<TTSPlayerWidget>
 
   Widget _buildVoiceSelector() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: EdgeInsets.symmetric(
+        horizontal: Responsive.padding(context, 8),
+        vertical: Responsive.padding(context, 4),
+      ),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(Responsive.radius(context, 10)),
       ),
       child: Row(
         children: [
-          const Icon(Icons.record_voice_over, color: Colors.white70, size: 16),
-          const SizedBox(width: 6),
+          Icon(
+            Icons.record_voice_over,
+            color: Colors.white70,
+            size: Responsive.iconSize(context, 14),
+          ),
+          SizedBox(width: Responsive.padding(context, 6)),
           Expanded(
             child: DropdownButtonHideUnderline(
               child: DropdownButton<String>(
@@ -642,18 +693,24 @@ class _TTSPlayerWidgetState extends State<TTSPlayerWidget>
                     ? _ttsService.currentVoice
                     : null,
                 dropdownColor: AppColors.palmLeafGreen,
-                style: const TextStyle(color: Colors.white, fontSize: 11),
-                icon: const Icon(
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: Responsive.fontSize(context, 10),
+                ),
+                icon: Icon(
                   Icons.arrow_drop_down,
                   color: Colors.white70,
-                  size: 18,
+                  size: Responsive.iconSize(context, 16),
                 ),
                 items: _ttsService.availableVoices.map((voice) {
                   return DropdownMenuItem<String>(
                     value: voice['name'],
                     child: Text(
                       '${voice['name']} (${voice['locale']})',
-                      style: const TextStyle(color: Colors.white, fontSize: 11),
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: Responsive.fontSize(context, 10),
+                      ),
                       overflow: TextOverflow.ellipsis,
                     ),
                   );
@@ -677,19 +734,29 @@ class _TTSPlayerWidgetState extends State<TTSPlayerWidget>
 
   Widget _buildNoVoicesMessage() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      padding: EdgeInsets.symmetric(
+        horizontal: Responsive.padding(context, 8),
+        vertical: Responsive.padding(context, 6),
+      ),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(Responsive.radius(context, 10)),
       ),
-      child: const Row(
+      child: Row(
         children: [
-          Icon(Icons.info_outline, color: Colors.white54, size: 14),
-          SizedBox(width: 6),
+          Icon(
+            Icons.info_outline,
+            color: Colors.white54,
+            size: Responsive.iconSize(context, 12),
+          ),
+          SizedBox(width: Responsive.padding(context, 6)),
           Expanded(
             child: Text(
               'Using default system voice',
-              style: TextStyle(color: Colors.white54, fontSize: 11),
+              style: TextStyle(
+                color: Colors.white54,
+                fontSize: Responsive.fontSize(context, 10),
+              ),
             ),
           ),
         ],

@@ -2,7 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:thiruvasagampro/utils/app_colors.dart';
-// Make sure this path is correct
+import 'package:thiruvasagampro/utils/responsive_theme.dart';
 
 class AppSnackBars {
   static void showBookmark(
@@ -10,10 +10,8 @@ class AppSnackBars {
     required bool isBookmarked,
     required bool isFromBookmarks,
   }) {
-    // Clear any existing snackbars first
     ScaffoldMessenger.of(context).clearSnackBars();
 
-    // Show the new one
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
@@ -23,42 +21,52 @@ class AppSnackBars {
               ? 'புக்மார்க்கில் சேர்க்கப்பட்டது (Added)'
               : 'நீக்கப்பட்டது (Removed)',
           textAlign: TextAlign.center,
-          style: const TextStyle(
+          style: TextStyle(
             color: Colors.white,
-            fontSize: 16,
+            fontSize: Responsive.fontSize(context, 14),
             fontWeight: FontWeight.bold,
           ),
         ),
         backgroundColor: AppColors.vintageInk,
         duration: const Duration(seconds: 2),
         behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.only(bottom: 20, left: 20, right: 20),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: EdgeInsets.only(
+          bottom: Responsive.padding(context, 20),
+          left: Responsive.padding(context, 20),
+          right: Responsive.padding(context, 20),
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(Responsive.radius(context, 12)),
+        ),
       ),
     );
   }
 
   static void showBar(BuildContext context, {required String title}) {
-    // Clear any existing snackbars first
     ScaffoldMessenger.of(context).clearSnackBars();
 
-    // Show the new one
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
           title,
           textAlign: TextAlign.center,
-          style: const TextStyle(
+          style: TextStyle(
             color: Colors.white,
-            fontSize: 16,
+            fontSize: Responsive.fontSize(context, 14),
             fontWeight: FontWeight.bold,
           ),
         ),
         backgroundColor: AppColors.vintageInk,
         duration: const Duration(seconds: 2),
         behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.only(bottom: 20, left: 20, right: 20),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: EdgeInsets.only(
+          bottom: Responsive.padding(context, 20),
+          left: Responsive.padding(context, 20),
+          right: Responsive.padding(context, 20),
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(Responsive.radius(context, 12)),
+        ),
       ),
     );
   }

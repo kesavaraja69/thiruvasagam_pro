@@ -25,13 +25,7 @@ class ParchmentBackground extends StatelessWidget {
           color: AppColors.white,
           image: DecorationImage(
             image: AssetImage(imagePath),
-            fit: BoxFit.fill, // Stretches the image to fill the screen
-            // Optional: If your background image is too bright and makes the text
-            // hard to read, uncomment these lines to add a subtle dark tint.
-            // colorFilter: ColorFilter.mode(
-            //   Colors.black.withOpacity(0.05),
-            //   BlendMode.darken,
-            // ),
+            fit: BoxFit.cover, // Preserves aspect ratio while covering the screen
           ),
         ),
         child: child,

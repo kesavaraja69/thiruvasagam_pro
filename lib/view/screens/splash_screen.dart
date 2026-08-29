@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:thiruvasagampro/utils/app_assets.dart';
+import 'package:thiruvasagampro/utils/responsive_theme.dart';
 import 'package:thiruvasagampro/view/widgets/parchment_background.dart';
 
 import 'onboarding_screen.dart';
@@ -73,12 +74,12 @@ class _SplashScreenState extends State<SplashScreen> {
               // 1. The Sacred Logo
               Image.asset(
                 AppAssets.logo2,
-                width: 500,
-                height: 500,
+                width: Responsive.dim(context, 300),
+                height: Responsive.dim(context, 300),
                 fit: BoxFit.contain,
               ),
 
-              const SizedBox(height: 20),
+              SizedBox(height: Responsive.height(context, 20)),
 
               // 2. App Title in Tamil
 

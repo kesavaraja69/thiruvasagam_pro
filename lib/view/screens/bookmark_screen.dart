@@ -53,11 +53,11 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
                   }
 
                   if (provider.bookmarkedChapters.isEmpty) {
-                    return const Center(
+                    return Center(
                       child: Text(
-                        'எந்தப் பாடலும் சேமிக்கப்படவில்லை.', // "No songs saved"
+                        'எந்தப் பாடலும் சேமிக்கப்படவில்லை.',
                         style: TextStyle(
-                          fontSize: 18,
+                          fontSize: Responsive.fontSize(context, 18),
                           color: AppColors.vintageInk,
                         ),
                       ),
@@ -65,33 +65,30 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
                   }
 
                   // The List of Bookmarks
-                  return ListView.separated(
-                    padding: const EdgeInsets.only(left: 12, right: 12, bottom: 100),
+                  return Center(
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxWidth: Responsive.readingMaxWidth(context),
+                      ),
+                    child: ListView.separated(
+                      padding: EdgeInsets.only(
+                        left: Responsive.padding(context, 12),
+                        right: Responsive.padding(context, 12),
+                        bottom: Responsive.padding(context, 100),
+                      ),
                     itemCount: provider.bookmarkedChapters.length,
 
-                    // Use your beautiful temple divider between items!
                     separatorBuilder: (context, index) => Padding(
-                      // The vertical padding creates space between the text and the image
-                      padding: const EdgeInsets.symmetric(
+                      padding: EdgeInsets.symmetric(
                         vertical: 0,
-                        horizontal: 12,
+                        horizontal: Responsive.padding(context, 12),
                       ),
 
                       child: Image.asset(
                         AppAssets.templeDivider,
-
-                        // 🚨 Adjust this height based on how thick your image is!
-                        // 15-25 is usually the sweet spot for dividers.
-                        height: 16,
-                        width: 130,
-
-                        // 'contain' ensures the whole ornament fits perfectly without getting chopped off
+                        height: Responsive.dim(context, 14),
+                        width: Responsive.dim(context, 120),
                         fit: BoxFit.fill,
-
-                        // Optional Pro-Tip: If your image is black, but you want it to match your
-                        // vintage ink color exactly, uncomment these two lines!
-                        // color: AppColors.vintageInk,
-                        // colorBlendMode: BlendMode.srcIn,
                       ),
                     ),
 
@@ -120,16 +117,16 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
                             );
                           },
                           child: Padding(
-                            padding: const EdgeInsets.all(2),
-                            // Using your filled bookmark icon to show it's currently saved
+                            padding: EdgeInsets.all(
+                              Responsive.padding(context, 2),
+                            ),
                             child: Image.asset(
                               AppAssets.iconBookmarkFilled,
-                              width: 35,
+                              width: Responsive.dim(context, 30),
                             ),
                           ),
                         ),
 
-                        // Navigate to the reading screen when they tap the title!
                         onTap: () {
                           Navigator.push(
                             context,
@@ -142,8 +139,9 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
                           );
                         },
                       );
-                    },
-                  );
+                    },                    ),  // ListView.separated
+                    ),  // ConstrainedBox
+                    );  // Center return statement
                 },
               ),
             ),

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:thiruvasagampro/utils/app_assets.dart';
 import 'package:thiruvasagampro/utils/app_colors.dart';
+import 'package:thiruvasagampro/utils/responsive_theme.dart';
 import 'package:thiruvasagampro/view/widgets/parchment_background.dart';
 
 import 'main_wrapper.dart'; // Or wherever your HomeScreen/BottomNav is
@@ -55,6 +56,17 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
+  void _onboardingAction() {
+    if (_currentPage == _pages.length - 1) {
+      _completeOnboarding();
+    } else {
+      _controller.nextPage(
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeInOut,
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return ParchmentBackground(
@@ -70,99 +82,168 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           },
           itemCount: _pages.length,
           itemBuilder: (context, index) {
-            return Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 30.0),
+            final isLandscape = Responsive.isTabletLandscape(context);
+
+            // ── Content text widget (reused in both layouts) ──
+            final textContent = SingleChildScrollView(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: isLandscape ? MainAxisSize.min : MainAxisSize.max,
                 children: [
-                  Spacer(),
-                  Image.asset(
-                    _pages[index]['image']!,
-                    height: 400,
-                    fit: BoxFit.contain,
-                  ),
-                  const SizedBox(height: 6),
                   Text(
                     _pages[index]['title']!,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontSize: 24,
+                    style: TextStyle(
+                      fontSize: Responsive.fontSize(context, 19),
                       fontWeight: FontWeight.bold,
                       color: AppColors.vintageInk,
                       height: 1.3,
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  SizedBox(height: Responsive.height(context, 12)),
                   Text(
                     _pages[index]['body']!,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontSize: 16,
+                    style: TextStyle(
+                      fontSize: Responsive.fontSize(context, 12),
                       color: Colors.black87,
                       fontWeight: FontWeight.w700,
                       height: 1.5,
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  SizedBox(height: Responsive.height(context, 12)),
+                  // Page indicators
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: List.generate(
                       _pages.length,
-                      (index) => AnimatedContainer(
+                      (i) => AnimatedContainer(
                         duration: const Duration(milliseconds: 300),
-                        margin: const EdgeInsets.symmetric(horizontal: 5),
-                        height: 10,
-                        width: _currentPage == index
-                            ? 20
-                            : 10, // Active dot is wider
+                        margin: EdgeInsets.symmetric(
+                          horizontal: Responsive.padding(context, 5),
+                        ),
+                        height: Responsive.dim(context, 10),
+                        width: _currentPage == i
+                            ? Responsive.dim(context, 20)
+                            : Responsive.dim(context, 10),
                         decoration: BoxDecoration(
-                          color: _currentPage == index
+                          color: _currentPage == i
                               ? AppColors.vintageInk
                               : AppColors.vintageInk.withValues(alpha: 0.3),
-                          borderRadius: BorderRadius.circular(5),
+                          borderRadius: BorderRadius.circular(
+                            Responsive.radius(context, 5),
+                          ),
                         ),
                       ),
                     ),
                   ),
-                  const Spacer(),
-                  // The Action Button
-                  SizedBox(
-                    width: double.infinity,
-                    height: 55,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.vintageInk,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                      onPressed: () {
-                        if (_currentPage == _pages.length - 1) {
-                          // If on the last page, finish onboarding
-                          _completeOnboarding();
-                        } else {
-                          // Otherwise, go to the next page
-                          _controller.nextPage(
-                            duration: const Duration(milliseconds: 400),
-                            curve: Curves.easeInOut,
-                          );
-                        }
-                      },
-                      child: Text(
-                        _currentPage == _pages.length - 1
-                            ? 'தொடங்குங்கள் (Get Started)'
-                            : 'அடுத்து (Next)',
-                        style: const TextStyle(
-                          fontSize: 18,
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const Spacer(),
                 ],
               ),
+            );
+
+            return Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: Responsive.padding(context, isLandscape ? 40 : 30),
+              ),
+              child: isLandscape
+                  // ── Landscape: image left, text right ──
+                  ? Row(
+                      children: [
+                        Expanded(
+                          flex: 4,
+                          child: Center(
+                            child: Image.asset(
+                              _pages[index]['image']!,
+                              height: Responsive.height(context, 160),
+                              fit: BoxFit.contain,
+                            ),
+                          ),
+                        ),
+                        SizedBox(width: Responsive.padding(context, 24)),
+                        Expanded(
+                          flex: 6,
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              textContent,
+                              const Spacer(),
+                              SizedBox(
+                                width: double.infinity,
+                                height: Responsive.height(context, 44),
+                                child: ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppColors.vintageInk,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(
+                                        Responsive.radius(context, 10),
+                                      ),
+                                    ),
+                                  ),
+                                  onPressed: _onboardingAction,
+                                  child: Text(
+                                    _currentPage == _pages.length - 1
+                                        ? 'தொடங்குங்கள் (Get Started)'
+                                        : 'அடுத்து (Next)',
+                                    style: TextStyle(
+                                      fontSize: Responsive.fontSize(
+                                        context,
+                                        14,
+                                      ),
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    )
+                  // ── Portrait: stacked vertically ──
+                  : SingleChildScrollView(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Spacer(),
+                          Image.asset(
+                            _pages[index]['image']!,
+                            height: Responsive.height(context, 160),
+                            fit: BoxFit.contain,
+                          ),
+                          SizedBox(height: Responsive.height(context, 6)),
+                          textContent,
+                          SizedBox(height: Responsive.height(context, 25)),
+                          SizedBox(
+                            width: double.infinity,
+                            height: Responsive.height(context, 50),
+                            child: ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.vintageInk,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(
+                                    Responsive.radius(context, 10),
+                                  ),
+                                ),
+                              ),
+                              onPressed: _onboardingAction,
+                              child: Text(
+                                _currentPage == _pages.length - 1
+                                    ? 'தொடங்குங்கள் (Get Started)'
+                                    : 'அடுத்து (Next)',
+                                style: TextStyle(
+                                  fontSize: Responsive.fontSize(context, 15),
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const Spacer(),
+                        ],
+                      ),
+                    ),
             );
           },
         ),
