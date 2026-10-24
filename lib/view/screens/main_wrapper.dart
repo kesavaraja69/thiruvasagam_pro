@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:thiruvasagampro/utils/app_colors.dart';
+import 'package:thiruvasagampro/utils/notification_navigator.dart';
 import 'package:thiruvasagampro/view/screens/bookmark_screen.dart';
 import 'package:thiruvasagampro/view/screens/settings_screen.dart';
 import 'package:thiruvasagampro/view/widgets/ancient_bottom_nav.dart';
@@ -21,6 +22,16 @@ class MainWrapper extends StatefulWidget {
 
 class _MainWrapperState extends State<MainWrapper> {
   int _selectedIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    // If the app was launched by tapping the daily reminder, open the next
+    // unread song now that the home screen is in place.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      handlePendingReminderTap();
+    });
+  }
 
   // The list of screens to show based on the selected tab
   final List<Widget> _screens = [

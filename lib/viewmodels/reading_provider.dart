@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:thiruvasagampro/services/notification_service.dart';
+import 'package:thiruvasagampro/services/reading_progress_service.dart';
+import 'package:thiruvasagampro/services/reward_unlock_service.dart';
+import 'package:thiruvasagampro/utils/ad_consent_manager.dart';
 import 'package:thiruvasagampro/utils/ad_helper.dart';
 import 'package:thiruvasagampro/utils/app_open_ad_manager.dart';
 import '../models/chapter.dart';
@@ -27,16 +31,30 @@ class ReadingProvider with ChangeNotifier {
 
   bool _isReadingFromBookmarks = false;
 
-  RewardedInterstitialAd? _rewardedInterstitialAd;
-
   // Eye Protection / Read Mode Settings
   bool _eyeProtectionEnabled = false;
   double _eyeWarmth = 0.3;
   double _eyeDimness = 0.15;
 
-  bool get eyeProtectionEnabled => _eyeProtectionEnabled;
+  bool get eyeProtectionEnabled =>
+      _eyeProtectionEnabled &&
+      RewardUnlockService.instance.eyeProtectionEnabled;
   double get eyeWarmth => _eyeWarmth;
   double get eyeDimness => _eyeDimness;
+
+  // Continuous Play (auto-advance to the next song when one finishes)
+  bool _continuousPlayEnabled = true;
+
+  bool get continuousPlayEnabled => _continuousPlayEnabled;
+
+  // Daily reminder notification (defaults to 6:00 PM)
+  bool _reminderEnabled = true;
+  int _reminderHour = 18;
+  int _reminderMinute = 0;
+
+  bool get reminderEnabled => _reminderEnabled;
+  TimeOfDay get reminderTime =>
+      TimeOfDay(hour: _reminderHour, minute: _reminderMinute);
 
   // Font Settings
   double _fontSize = 19.0;
@@ -56,9 +74,21 @@ class ReadingProvider with ChangeNotifier {
 
   String _currentFontFamily = 'System'; // Default font
 
+  /// Fonts available without watching a rewarded ad.
+  static const Set<String> freeFonts = {'System', 'NotoSansTamil'};
+
   // 2. Add Getters
-  String get currentFontFamily => _currentFontFamily;
+  String get currentFontFamily {
+    if (!canUseFont(_currentFontFamily)) return 'System';
+    return _currentFontFamily;
+  }
+
   List<String> get availableFonts => _fontFamilies;
+
+  bool get fontsUnlocked => RewardUnlockService.instance.fontsUnlocked;
+
+  bool canUseFont(String fontName) =>
+      freeFonts.contains(fontName) || fontsUnlocked;
   bool _isLoading = true;
 
   // Chapter get currentChapter => _allChapters[_currentIndex];
@@ -87,11 +117,11 @@ class ReadingProvider with ChangeNotifier {
   // }
 
   // ads
-  int _toolbarClickCount = 0;
   int _nextChapterClickCount = 0;
   int _previousChapterClickCount = 0;
   int _homeScreenClickCount = 0;
   InterstitialAd? _interstitialAd;
+  DateTime? _lastInterstitialShownAt;
 
   void resetChapterClickCounters() {
     _nextChapterClickCount = 0;
@@ -106,55 +136,35 @@ class ReadingProvider with ChangeNotifier {
   // bool get hasPrevious => _currentIndex > 0;
 
   //ads
-  // Call this in the constructor or init method of your provider
   void loadInterstitialAd() {
+    if (!AdConsentManager.canRequestAds) return;
+
     InterstitialAd.load(
       adUnitId: AdHelper.interstitialAdUnitId,
       request: const AdRequest(),
       adLoadCallback: InterstitialAdLoadCallback(
         onAdLoaded: (ad) {
-          // ad.fullScreenContentCallback = FullScreenContentCallback(
-          //   onAdDismissedFullScreenContent: (ad) {
-          //     ad.dispose();
-          //     loadInterstitialAd(); // Load the next one immediately after closing
-          //   },
-          //   onAdFailedToShowFullScreenContent: (ad, error) {
-          //     ad.dispose();
-          //     loadInterstitialAd();
-          //   },
-          // );
-          // _interstitialAd = ad;
           ad.fullScreenContentCallback = FullScreenContentCallback(
-            // 🚨 1. Turn the lock ON when the Interstitial Ad shows
             onAdShowedFullScreenContent: (ad) {
               AppOpenAdManager.pauseAppOpenAd = true;
             },
-
-            // 🚨 2. Turn the lock OFF when the user closes the ad
             onAdDismissedFullScreenContent: (ad) {
-              // 🚨 Add the exact same delay here just in case!
-              Future.delayed(const Duration(seconds: 1), () {
-                AppOpenAdManager.pauseAppOpenAd = false;
-              });
-              // AppOpenAdManager.pauseAppOpenAd = false;
+              _interstitialAd = null;
               ad.dispose();
-              loadInterstitialAd(); // Load the next one immediately after closing
+              AppOpenAdManager.markFullScreenAdClosed();
+              loadInterstitialAd();
             },
-
-            // 🚨 3. Turn the lock OFF if the ad fails to show
             onAdFailedToShowFullScreenContent: (ad, error) {
-              // 🚨 Add the exact same delay here just in case!
-              Future.delayed(const Duration(seconds: 1), () {
-                AppOpenAdManager.pauseAppOpenAd = false;
-              });
-              //AppOpenAdManager.pauseAppOpenAd = false;
+              _interstitialAd = null;
               ad.dispose();
+              AppOpenAdManager.markFullScreenAdClosed();
               loadInterstitialAd();
             },
           );
           _interstitialAd = ad;
         },
         onAdFailedToLoad: (err) {
+          _interstitialAd = null;
           debugPrint('Failed to load an interstitial ad: ${err.message}');
         },
       ),
@@ -193,25 +203,37 @@ class ReadingProvider with ChangeNotifier {
     }
   }
 
-  // 🚨 The magic function to show the ad safely
-  Future handleToolbarAction(BuildContext context, VoidCallback action) async {
-    action();
-    _toolbarClickCount++;
+  bool _canShowInterstitial() {
+    if (_interstitialAd == null) return false;
+    if (AppOpenAdManager.pauseAppOpenAd) return false;
+    if (RewardUnlockService.instance.isAdFree) return false;
 
-    if (_toolbarClickCount % 3 == 0 && _interstitialAd != null) {
-      await _showAdWithLoadingDialog(context, _interstitialAd!.show);
+    final lastShown = _lastInterstitialShownAt;
+    if (lastShown != null &&
+        DateTime.now().difference(lastShown) < const Duration(seconds: 60)) {
+      return false;
     }
+    return true;
   }
 
-  // Show interstitial ad every 2 taps on song list in HomeScreen
+  Future<void> _maybeShowInterstitial(BuildContext context) async {
+    if (!_canShowInterstitial()) return;
+
+    final ad = _interstitialAd!;
+    _lastInterstitialShownAt = DateTime.now();
+    await _showAdWithLoadingDialog(context, ad.show);
+  }
+
+  // Show an interstitial at the natural break of opening a chapter, no more
+  // than once every three taps and once per minute.
   Future handleHomeScreenTap(
     BuildContext context,
     VoidCallback navigateAction,
   ) async {
     _homeScreenClickCount++;
 
-    if (_homeScreenClickCount % 2 == 0 && _interstitialAd != null) {
-      await _showAdWithLoadingDialog(context, _interstitialAd!.show);
+    if (_homeScreenClickCount % 3 == 0) {
+      await _maybeShowInterstitial(context);
     }
 
     navigateAction();
@@ -219,9 +241,45 @@ class ReadingProvider with ChangeNotifier {
 
   ReadingProvider() {
     loadChapterstitle();
-    loadInterstitialAd();
-    loadRewardedInterstitialAd();
-    _loadEyeProtectionSettings();
+    _setupAds();
+    _loadPersistedSettings();
+    // Refresh the overlay when a time-limited reward (e.g. eye protection)
+    // expires or is granted.
+    RewardUnlockService.instance.addListener(_onRewardsChanged);
+  }
+
+  void _onRewardsChanged() => notifyListeners();
+
+  void _setupAds() {
+    // Keep listening after the initial decision so withdrawing consent in the
+    // Ad privacy settings immediately disposes the preloaded interstitial.
+    AdConsentManager.state.addListener(_onConsentStateChanged);
+    if (AdConsentManager.canRequestAds) {
+      _loadAdsAfterConsent();
+    }
+  }
+
+  void _onConsentStateChanged() {
+    if (AdConsentManager.canRequestAds) {
+      _loadAdsAfterConsent();
+      return;
+    }
+
+    _interstitialAd?.dispose();
+    _interstitialAd = null;
+  }
+
+  void _loadAdsAfterConsent() {
+    if (!AdConsentManager.canRequestAds) return;
+    if (_interstitialAd == null) loadInterstitialAd();
+  }
+
+  @override
+  void dispose() {
+    RewardUnlockService.instance.removeListener(_onRewardsChanged);
+    AdConsentManager.state.removeListener(_onConsentStateChanged);
+    _interstitialAd?.dispose();
+    super.dispose();
   }
 
   Future<void> loadChapterstitle() async {
@@ -248,29 +306,39 @@ class ReadingProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  // Navigation with interstitial ad after every 3 clicks
+  // Navigation with an interstitial at the page break after every 3 clicks.
   Future<void> nextChapter(BuildContext context) async {
+    if (!hasNext) return;
+
+    _nextChapterClickCount++;
+    if (_nextChapterClickCount % 3 == 0) {
+      await _maybeShowInterstitial(context);
+    }
+
+    _currentIndex++;
+    notifyListeners();
+  }
+
+  /// Moves to the next song without showing an interstitial ad.
+  /// Used by the audio player when a song finishes so playback continues
+  /// automatically into the next song (the reading screen then updates).
+  void autoAdvanceChapter() {
     if (hasNext) {
       _currentIndex++;
-      _nextChapterClickCount++;
       notifyListeners();
-
-      if (_nextChapterClickCount % 3 == 0 && _interstitialAd != null) {
-        await _showAdWithLoadingDialog(context, _interstitialAd!.show);
-      }
     }
   }
 
   Future<void> previousChapter(BuildContext context) async {
-    if (hasPrevious) {
-      _currentIndex--;
-      _previousChapterClickCount++;
-      notifyListeners();
+    if (!hasPrevious) return;
 
-      if (_previousChapterClickCount % 3 == 0 && _interstitialAd != null) {
-        await _showAdWithLoadingDialog(context, _interstitialAd!.show);
-      }
+    _previousChapterClickCount++;
+    if (_previousChapterClickCount % 3 == 0) {
+      await _maybeShowInterstitial(context);
     }
+
+    _currentIndex--;
+    notifyListeners();
   }
 
   // Font Controls
@@ -295,21 +363,83 @@ class ReadingProvider with ChangeNotifier {
 
   // 3. Add the method to set a specific font
   void setFontFamily(String fontName) {
+    if (!canUseFont(fontName)) return;
     _currentFontFamily = fontName;
     notifyListeners();
   }
 
-  // Eye Protection Controls
-  Future<void> _loadEyeProtectionSettings() async {
+  // Eye Protection + Continuous Play + Reminder Controls
+  Future<void> _loadPersistedSettings() async {
     final prefs = await SharedPreferences.getInstance();
     _eyeProtectionEnabled = prefs.getBool('eye_protection_enabled') ?? false;
     _eyeWarmth = prefs.getDouble('eye_warmth') ?? 0.3;
     _eyeDimness = prefs.getDouble('eye_dimness') ?? 0.15;
+    _continuousPlayEnabled = prefs.getBool('continuous_play_enabled') ?? true;
+    // Daily song reminder — 6:00 PM until the user picks another time.
+    _reminderEnabled = prefs.getBool('reminder_enabled') ?? true;
+    _reminderHour = prefs.getInt('reminder_hour') ?? 18;
+    _reminderMinute = prefs.getInt('reminder_minute') ?? 0;
     notifyListeners();
+
+    // A fresh install has the reminder enabled, so ask for notification
+    // permission here as well; otherwise the OS silently blocks the reminder
+    // until the user happens to toggle it off and on.
+    if (_reminderEnabled) {
+      await NotificationService.instance.requestPermissions();
+    }
+
+    // Keep the OS schedule in sync with the saved settings on every launch
+    // (also re-arms it after a reboot/update).
+    await NotificationService.instance.applyDailyReminder(
+      enabled: _reminderEnabled,
+      hour: _reminderHour,
+      minute: _reminderMinute,
+    );
   }
 
-  Future<void> toggleEyeProtection() async {
-    _eyeProtectionEnabled = !_eyeProtectionEnabled;
+  Future<void> toggleContinuousPlay() async {
+    _continuousPlayEnabled = !_continuousPlayEnabled;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('continuous_play_enabled', _continuousPlayEnabled);
+  }
+
+  Future<void> toggleReminder(bool value) async {
+    _reminderEnabled = value;
+    notifyListeners();
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('reminder_enabled', _reminderEnabled);
+
+    if (_reminderEnabled) {
+      await NotificationService.instance.requestPermissions();
+    }
+    await NotificationService.instance.applyDailyReminder(
+      enabled: _reminderEnabled,
+      hour: _reminderHour,
+      minute: _reminderMinute,
+    );
+  }
+
+  Future<void> setReminderTime(TimeOfDay time) async {
+    _reminderHour = time.hour;
+    _reminderMinute = time.minute;
+    notifyListeners();
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('reminder_hour', _reminderHour);
+    await prefs.setInt('reminder_minute', _reminderMinute);
+
+    // Re-schedule right away so the new time takes effect today.
+    await NotificationService.instance.applyDailyReminder(
+      enabled: _reminderEnabled,
+      hour: _reminderHour,
+      minute: _reminderMinute,
+    );
+  }
+
+  Future<void> setEyeProtectionEnabled(bool value) async {
+    _eyeProtectionEnabled = value;
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('eye_protection_enabled', _eyeProtectionEnabled);
@@ -410,6 +540,10 @@ ${currentChapter.song}
 $appLink
 ''';
 
+    // Returning from the share sheet is not an app open; don't trigger an
+    // app open ad on the resume.
+    AppOpenAdManager.skipNextResume();
+
     // 3. 🚨 Share it using the NEW share_plus 13.1.0 API!
     SharePlus.instance.share(
       ShareParams(title: currentChapter.title, text: textToShare),
@@ -449,6 +583,12 @@ $appLink
 
     _currentIndex = activeList.indexWhere((c) => c.id == initialChapterId);
     if (_currentIndex == -1) _currentIndex = 0;
+
+    // Remember where the reader stopped, so the daily reminder can offer the
+    // next unread song instead of song 1 every time.
+    if (_currentIndex >= 0 && _currentIndex < activeList.length) {
+      await ReadingProgressService.markAsRead(activeList[_currentIndex].id);
+    }
 
     _isLoading = false;
     notifyListeners();
@@ -539,82 +679,6 @@ $appLink
   //     }
   //   }
   // }
-
-  // Inside ReadingProvider:
-
-  Future<void> toggleBookmarkWithAd(
-    BuildContext context, {
-    required bool isFromBookmarks,
-  }) async {
-    if (_rewardedInterstitialAd == null) {
-      toggleBookmark(isFromBookmarks: isFromBookmarks);
-      return;
-    }
-
-    await _showAdWithLoadingDialog(context, () {
-      _rewardedInterstitialAd!.show(
-        onUserEarnedReward: (AdWithoutView ad, RewardItem reward) {
-          toggleBookmark(isFromBookmarks: isFromBookmarks);
-        },
-      );
-    });
-  }
-
-  //bookmark with ad reward
-
-  // 1. Call this in your ReadingProvider constructor or init function!
-  void loadRewardedInterstitialAd() {
-    RewardedInterstitialAd.load(
-      adUnitId: AdHelper.rewardedInterstitialAdUnitId,
-      request: const AdRequest(),
-      rewardedInterstitialAdLoadCallback: RewardedInterstitialAdLoadCallback(
-        onAdLoaded: (ad) {
-          // ad.fullScreenContentCallback = FullScreenContentCallback(
-          //   onAdDismissedFullScreenContent: (ad) {
-          //     ad.dispose();
-          //     loadRewardedInterstitialAd(); // Load the next one
-          //   },
-          //   onAdFailedToShowFullScreenContent: (ad, error) {
-          //     ad.dispose();
-          //     loadRewardedInterstitialAd();
-          //   },
-          // );
-          // _rewardedInterstitialAd = ad;
-          ad.fullScreenContentCallback = FullScreenContentCallback(
-            // 🚨 Turn the lock ON when the Rewarded Ad shows
-            onAdShowedFullScreenContent: (ad) {
-              AppOpenAdManager.pauseAppOpenAd = true;
-            },
-            // 🚨 Turn the lock OFF when the user closes the Rewarded Ad
-            onAdDismissedFullScreenContent: (ad) {
-              // 🚨 Add the exact same delay here just in case!
-              Future.delayed(const Duration(seconds: 1), () {
-                AppOpenAdManager.pauseAppOpenAd = false;
-              });
-              // AppOpenAdManager.pauseAppOpenAd = false;
-              ad.dispose();
-              loadRewardedInterstitialAd(); // Load the next one
-            },
-            // 🚨 Turn the lock OFF if the ad fails to show
-            onAdFailedToShowFullScreenContent: (ad, error) {
-              // 🚨 Add the exact same delay here just in case!
-              Future.delayed(const Duration(seconds: 1), () {
-                AppOpenAdManager.pauseAppOpenAd = false;
-              });
-              // AppOpenAdManager.pauseAppOpenAd = false;
-              ad.dispose();
-              loadRewardedInterstitialAd();
-            },
-          );
-
-          _rewardedInterstitialAd = ad;
-        },
-        onAdFailedToLoad: (error) {
-          debugPrint('RewardedInterstitial failed to load: $error');
-        },
-      ),
-    );
-  }
 
   // // 2. The new function to handle the Bookmark click
   // Future<void> handleBookmarkWithReward(
