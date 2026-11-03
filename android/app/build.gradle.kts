@@ -9,8 +9,11 @@ if (keystorePropertiesFile.exists()) {
 
 plugins {
     id("com.android.application")
-    id("kotlin-android")
-    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
+    // NOTE: no `kotlin-android` plugin here on purpose. Flutter applies the Kotlin
+    // Gradle Plugin itself (because android.builtInKotlin=false in gradle.properties),
+    // and declaring it here logs an AGP 9 migration error that will become fatal in
+    // a future Flutter release. This matches Flutter's own app template.
+    // The Flutter Gradle Plugin must be applied after the Android Gradle plugin.
     id("dev.flutter.flutter-gradle-plugin")
 }
 
@@ -20,12 +23,10 @@ android {
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
+        // Required by flutter_local_notifications for scheduled notifications
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
-    }
-
-    kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_17.toString()
     }
 
     defaultConfig {
@@ -56,11 +57,29 @@ android {
             // In Kotlin, these use "is" as a prefix
             isMinifyEnabled = true
             isShrinkResources = true
-            
+
+            // R8/ProGuard keep rules so WorkManager, Room, encrypt, and AdMob
+            // classes survive minification (without this the app crashes on launch).
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
 }
 
 flutter {
     source = "../.."
+}
+
+// AGP 9 / Kotlin 2.4: the old `android { kotlinOptions { jvmTarget = ... } }` block
+// is gone. Kotlin is configured through this top-level block instead.
+kotlin {
+    compilerOptions {
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
+    }
+}
+
+dependencies {
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }

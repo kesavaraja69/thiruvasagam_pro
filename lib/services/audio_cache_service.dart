@@ -31,6 +31,18 @@ class AudioCacheService {
     }
   }
 
+  /// Returns the already-cached file without attempting a network download.
+  /// Use this for offline playback: it never blocks on or requires a network.
+  Future<File?> getExistingFile(String url) async {
+    try {
+      final fileInfo = await _audioCacheManager.getFileFromCache(url);
+      return fileInfo?.file;
+    } catch (e) {
+      debugPrint('AudioCacheService: Error reading cached file: $e');
+      return null;
+    }
+  }
+
   /// Check if a file is already cached for the given [url].
   Future<bool> isCached(String url) async {
     final fileInfo = await _audioCacheManager.getFileFromCache(url);

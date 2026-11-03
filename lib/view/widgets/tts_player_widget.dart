@@ -1,10 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:thiruvasagampro/services/tts_service.dart';
-import 'package:thiruvasagampro/utils/ad_helper.dart';
 import 'package:thiruvasagampro/utils/app_colors.dart';
-import 'package:thiruvasagampro/utils/app_open_ad_manager.dart';
 import 'package:thiruvasagampro/utils/responsive_theme.dart';
 
 /// A production-quality TTS player widget for text-to-speech playback.
@@ -32,10 +29,6 @@ class _TTSPlayerWidgetState extends State<TTSPlayerWidget>
   bool _isVoicesLoading = true;
   bool _hasInitError = false;
 
-  // Ad
-  InterstitialAd? _interstitialAd;
-  int _stopCount = 0;
-
   // Animation
   late AnimationController _expandController;
   late Animation<double> _expandAnimation;
@@ -52,7 +45,6 @@ class _TTSPlayerWidgetState extends State<TTSPlayerWidget>
       curve: Curves.easeInOut,
     );
     _initializeTTS();
-    _loadInterstitialAd();
   }
 
   @override
@@ -220,44 +212,6 @@ class _TTSPlayerWidgetState extends State<TTSPlayerWidget>
       _isPlaying = false;
       _isPaused = false;
     });
-
-    _stopCount++;
-    if (_stopCount % 2 == 0 && _interstitialAd != null && mounted) {
-      _interstitialAd!.show();
-    }
-  }
-
-  void _loadInterstitialAd() {
-    InterstitialAd.load(
-      adUnitId: AdHelper.interstitialAdUnitId,
-      request: const AdRequest(),
-      adLoadCallback: InterstitialAdLoadCallback(
-        onAdLoaded: (ad) {
-          ad.fullScreenContentCallback = FullScreenContentCallback(
-            onAdShowedFullScreenContent: (ad) {
-              AppOpenAdManager.pauseAppOpenAd = true;
-            },
-            onAdDismissedFullScreenContent: (ad) {
-              Future.delayed(const Duration(seconds: 1), () {
-                AppOpenAdManager.pauseAppOpenAd = false;
-              });
-              ad.dispose();
-              _loadInterstitialAd();
-            },
-            onAdFailedToShowFullScreenContent: (ad, error) {
-              Future.delayed(const Duration(seconds: 1), () {
-                AppOpenAdManager.pauseAppOpenAd = false;
-              });
-              ad.dispose();
-              _loadInterstitialAd();
-            },
-          );
-          _interstitialAd = ad;
-        },
-        onAdFailedToLoad: (err) =>
-            debugPrint('TTS interstitial failed: ${err.message}'),
-      ),
-    );
   }
 
   @override
@@ -481,11 +435,7 @@ class _TTSPlayerWidgetState extends State<TTSPlayerWidget>
           color: color.withValues(alpha: 0.9),
           shape: BoxShape.circle,
         ),
-        child: Icon(
-          icon,
-          color: Colors.white,
-          size: size * 0.55,
-        ),
+        child: Icon(icon, color: Colors.white, size: size * 0.55),
       ),
     );
   }

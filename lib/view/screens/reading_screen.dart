@@ -8,7 +8,9 @@ import 'package:thiruvasagampro/view/widgets/app_snackbars.dart';
 import 'package:thiruvasagampro/view/widgets/custom_banner_ad.dart'
     show CustomBannerAd;
 import 'package:thiruvasagampro/view/widgets/eye_protection_overlay.dart';
+import 'package:thiruvasagampro/services/reward_unlock_service.dart';
 import 'package:thiruvasagampro/view/widgets/parchment_background.dart';
+import 'package:thiruvasagampro/view/widgets/reward_ad_prompt.dart';
 import 'package:thiruvasagampro/view/widgets/tts_player_widget.dart';
 import 'package:thiruvasagampro/view/widgets/audio_player_widget.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
@@ -29,9 +31,14 @@ class ReadingScreen extends StatefulWidget {
 }
 
 class _ReadingScreenState extends State<ReadingScreen> {
+  ReadingProvider? _readingProvider;
   bool _isAudioAvailable = false;
   bool _isCheckingAudio = true;
   int? _lastCheckedChapterId;
+
+  /// True while we are switching songs because the previous one finished.
+  /// The next [AudioPlayerWidget] reads this and starts playing on its own.
+  bool _autoPlayNext = false;
 
   @override
   void initState() {
@@ -61,6 +68,7 @@ class _ReadingScreenState extends State<ReadingScreen> {
           _isAudioAvailable = false;
           _isCheckingAudio = false;
         });
+        _releaseAutoPlayNext();
       }
       return;
     }
@@ -77,6 +85,7 @@ class _ReadingScreenState extends State<ReadingScreen> {
             _isAudioAvailable = false;
             _isCheckingAudio = false;
           });
+          _releaseAutoPlayNext();
         }
         return;
       }
@@ -90,6 +99,7 @@ class _ReadingScreenState extends State<ReadingScreen> {
           _isAudioAvailable = response.statusCode == 200;
           _isCheckingAudio = false;
         });
+        _releaseAutoPlayNext();
       }
     } catch (e) {
       if (mounted) {
@@ -97,14 +107,47 @@ class _ReadingScreenState extends State<ReadingScreen> {
           _isAudioAvailable = false;
           _isCheckingAudio = false;
         });
+        _releaseAutoPlayNext();
       }
     }
+  }
+
+  /// Called when a song reaches its end: jump to the next song and play it
+  /// automatically so the reader can keep listening without tapping play.
+  void _handleAudioCompleted() {
+    if (!mounted) return;
+    final provider = Provider.of<ReadingProvider>(context, listen: false);
+
+    // Nothing to continue with, or the user turned Continuous Play off.
+    if (!provider.hasNext || !provider.continuousPlayEnabled) {
+      setState(() => _autoPlayNext = false);
+      return;
+    }
+
+    setState(() {
+      _autoPlayNext = true;
+      _isCheckingAudio = true;
+    });
+
+    // No interstitial here — auto playback should stay uninterrupted.
+    provider.autoAdvanceChapter();
+  }
+
+  /// Clears the auto-play flag *after* the rebuilt (auto-playing) player has
+  /// mounted, so it only applies to the song we just switched to.
+  void _releaseAutoPlayNext() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _autoPlayNext) {
+        setState(() => _autoPlayNext = false);
+      }
+    });
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     final provider = Provider.of<ReadingProvider>(context);
+    _readingProvider = provider;
     final currentChapterId = provider.currentChapter.id;
     if (currentChapterId != null &&
         currentChapterId != -1 &&
@@ -118,11 +161,10 @@ class _ReadingScreenState extends State<ReadingScreen> {
 
   @override
   void dispose() {
-    // Reset chapter ad counters when navigating away (e.g. back to home)
-    Provider.of<ReadingProvider>(
-      context,
-      listen: false,
-    ).resetChapterClickCounters();
+    // Reset chapter ad counters when navigating away (e.g. back to home).
+    // Use the cached provider: looking it up here would read a deactivated
+    // element and throw during unmount.
+    _readingProvider?.resetChapterClickCounters();
     super.dispose();
   }
 
@@ -162,8 +204,9 @@ class _ReadingScreenState extends State<ReadingScreen> {
                 final isLandscape = Responsive.isTabletLandscape(context);
 
                 // ── Landscape tablet layout ──────────────────────
-                if (isLandscape)
+                if (isLandscape) {
                   return _buildLandscapeLayout(context, provider);
+                }
 
                 // ── Portrait layout (phones + portrait tablets) ──
                 return Column(
@@ -222,8 +265,7 @@ class _ReadingScreenState extends State<ReadingScreen> {
                                     ? AppAssets.iconBookmarkFilled
                                     : AppAssets.iconBookmarkOutline,
                                 () async {
-                                  await provider.toggleBookmarkWithAd(
-                                    context,
+                                  provider.toggleBookmark(
                                     isFromBookmarks: widget.isFromBookmarks,
                                   );
                                   if (context.mounted) {
@@ -241,7 +283,6 @@ class _ReadingScreenState extends State<ReadingScreen> {
                         ),
                       ),
                     ),
-                    const CustomBannerAd(),
                     // 3. Action Toolbar (A-, A+, Copy, Share, Tt)
                     Padding(
                       padding: EdgeInsets.symmetric(
@@ -250,57 +291,27 @@ class _ReadingScreenState extends State<ReadingScreen> {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                         children: [
-                          _buildImageBtn(AppAssets.iconFontDec, () async {
-                            await provider.handleToolbarAction(
-                              context,
-                              provider.decreaseFont,
-                            );
+                          _buildImageBtn(AppAssets.iconFontDec, () {
+                            provider.decreaseFont();
                           }),
-                          _buildImageBtn(
-                            AppAssets.iconFontInc,
-                            () async {
-                              await provider.handleToolbarAction(
+                          _buildImageBtn(AppAssets.iconFontInc, () {
+                            provider.increaseFont();
+                          }),
+                          _buildImageBtn(AppAssets.iconCopy, () {
+                            provider.copyToClipboard();
+                            if (context.mounted) {
+                              AppSnackBars.showBar(
                                 context,
-                                provider.increaseFont,
+                                title: "பாடல் நகலெடுக்கப்பட்டது (Copied)",
                               );
-                            },
-                          ),
-                          _buildImageBtn(
-                            AppAssets.iconCopy,
-                            () async {
-                              await provider.handleToolbarAction(
-                                context,
-                                provider.copyToClipboard,
-                              );
-                              if (context.mounted) {
-                                AppSnackBars.showBar(
-                                  context,
-                                  title: "பாடல் நகலெடுக்கப்பட்டது (Copied)",
-                                );
-                              }
-                            },
-                          ),
-                          _buildImageBtn(
-                            AppAssets.iconShare,
-                            () async {
-                              await provider.handleToolbarAction(
-                                context,
-                                provider.shareSong,
-                              );
-                            },
-                          ),
-                          _buildImageBtn(
-                            AppAssets.iconFontChange,
-                            () async {
-                              await provider.handleToolbarAction(
-                                context,
-                                () {},
-                              );
-                              if (context.mounted) {
-                                _showFontPicker(context, provider);
-                              }
-                            },
-                          ),
+                            }
+                          }),
+                          _buildImageBtn(AppAssets.iconShare, () {
+                            provider.shareSong();
+                          }),
+                          _buildImageBtn(AppAssets.iconFontChange, () {
+                            _showFontPicker(context, provider);
+                          }),
                         ],
                       ),
                     ),
@@ -338,10 +349,13 @@ class _ReadingScreenState extends State<ReadingScreen> {
                                     ),
                                   ),
                                   Text(
-                                    'பாடல் ${widget.chapterId}/51',
+                                    'பாடல் ${provider.currentChapter.id ?? widget.chapterId}/51',
                                     style: TextStyle(
                                       fontWeight: FontWeight.bold,
-                                      fontSize: Responsive.fontSize(context, 15),
+                                      fontSize: Responsive.fontSize(
+                                        context,
+                                        15,
+                                      ),
                                     ),
                                   ),
                                   GestureDetector(
@@ -418,14 +432,19 @@ class _ReadingScreenState extends State<ReadingScreen> {
                                           strokeWidth: 2,
                                         ),
                                       ),
-                                      SizedBox(width: Responsive.padding(context, 8)),
+                                      SizedBox(
+                                        width: Responsive.padding(context, 8),
+                                      ),
                                       Text(
                                         'Checking audio...',
                                         style: TextStyle(
                                           color: Colors.white.withValues(
                                             alpha: 0.7,
                                           ),
-                                          fontSize: Responsive.fontSize(context, 12),
+                                          fontSize: Responsive.fontSize(
+                                            context,
+                                            12,
+                                          ),
                                         ),
                                       ),
                                     ],
@@ -442,7 +461,10 @@ class _ReadingScreenState extends State<ReadingScreen> {
                                   audioUrl: provider.currentChapter.id != null
                                       ? 'https://thiruvasagam.dftacademy.in/song${provider.currentChapter.id}.mp3'
                                       : null,
+                                  chapterId: provider.currentChapter.id,
                                   title: provider.currentChapter.title,
+                                  autoPlay: _autoPlayNext,
+                                  onCompleted: _handleAudioCompleted,
                                 ),
                               )
                             else
@@ -522,15 +544,13 @@ class _ReadingScreenState extends State<ReadingScreen> {
                       ? AppAssets.iconBookmarkFilled
                       : AppAssets.iconBookmarkOutline,
                   () async {
-                    await provider.toggleBookmarkWithAd(
-                      context,
+                    provider.toggleBookmark(
                       isFromBookmarks: widget.isFromBookmarks,
                     );
                     if (context.mounted) {
                       AppSnackBars.showBookmark(
                         context,
-                        isBookmarked:
-                            provider.currentChapter.isBookmarked,
+                        isBookmarked: provider.currentChapter.isBookmarked,
                         isFromBookmarks: widget.isFromBookmarks,
                       );
                     }
@@ -563,23 +583,14 @@ class _ReadingScreenState extends State<ReadingScreen> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
-                      _buildImageBtn(AppAssets.iconFontDec, () async {
-                        await provider.handleToolbarAction(
-                          context,
-                          provider.decreaseFont,
-                        );
+                      _buildImageBtn(AppAssets.iconFontDec, () {
+                        provider.decreaseFont();
                       }),
-                      _buildImageBtn(AppAssets.iconFontInc, () async {
-                        await provider.handleToolbarAction(
-                          context,
-                          provider.increaseFont,
-                        );
+                      _buildImageBtn(AppAssets.iconFontInc, () {
+                        provider.increaseFont();
                       }),
-                      _buildImageBtn(AppAssets.iconCopy, () async {
-                        await provider.handleToolbarAction(
-                          context,
-                          provider.copyToClipboard,
-                        );
+                      _buildImageBtn(AppAssets.iconCopy, () {
+                        provider.copyToClipboard();
                         if (context.mounted) {
                           AppSnackBars.showBar(
                             context,
@@ -587,25 +598,18 @@ class _ReadingScreenState extends State<ReadingScreen> {
                           );
                         }
                       }),
-                      _buildImageBtn(AppAssets.iconShare, () async {
-                        await provider.handleToolbarAction(
-                          context,
-                          provider.shareSong,
-                        );
+                      _buildImageBtn(AppAssets.iconShare, () {
+                        provider.shareSong();
                       }),
-                      _buildImageBtn(AppAssets.iconFontChange, () async {
-                        await provider.handleToolbarAction(
-                          context, () {});
-                        if (context.mounted) {
-                          _showFontPicker(context, provider);
-                        }
+                      _buildImageBtn(AppAssets.iconFontChange, () {
+                        _showFontPicker(context, provider);
                       }),
                     ],
                   ),
                 ),
                 // Song counter
                 Text(
-                  '${widget.chapterId}/51',
+                  '${provider.currentChapter.id ?? widget.chapterId}/51',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: Responsive.fontSize(context, 13),
@@ -669,16 +673,19 @@ class _ReadingScreenState extends State<ReadingScreen> {
                     ),
                   )
                 : _isAudioAvailable
-                    ? AudioPlayerWidget(
-                        audioUrl: provider.currentChapter.id != null
-                            ? 'https://thiruvasagam.dftacademy.in/song${provider.currentChapter.id}.mp3'
-                            : null,
-                        title: provider.currentChapter.title,
-                      )
-                    : TTSPlayerWidget(
-                        textToSpeak: provider.currentChapter.song,
-                        title: provider.currentChapter.title,
-                      ),
+                ? AudioPlayerWidget(
+                    audioUrl: provider.currentChapter.id != null
+                        ? 'https://thiruvasagam.dftacademy.in/song${provider.currentChapter.id}.mp3'
+                        : null,
+                    chapterId: provider.currentChapter.id,
+                    title: provider.currentChapter.title,
+                    autoPlay: _autoPlayNext,
+                    onCompleted: _handleAudioCompleted,
+                  )
+                : TTSPlayerWidget(
+                    textToSpeak: provider.currentChapter.song,
+                    title: provider.currentChapter.title,
+                  ),
           ),
 
         const CustomBannerAd(),
@@ -760,6 +767,9 @@ class _ReadingScreenState extends State<ReadingScreen> {
                   String displayName = font == 'System'
                       ? 'இயல்புநிலை (System)'
                       : font;
+                  final isLocked =
+                      !ReadingProvider.freeFonts.contains(font) &&
+                      !provider.fontsUnlocked;
                   return ListTile(
                     title: Text(
                       'திருவாசகம் - $displayName',
@@ -769,10 +779,35 @@ class _ReadingScreenState extends State<ReadingScreen> {
                         color: Colors.white,
                       ),
                     ),
-                    trailing: provider.currentFontFamily == font
+                    subtitle: isLocked
+                        ? Text(
+                            '24 மணி நேரத்திற்கு விளம்பரம் பார்த்து திறக்க',
+                            style: TextStyle(
+                              fontSize: Responsive.fontSize(context, 11),
+                              color: Colors.white70,
+                            ),
+                          )
+                        : null,
+                    trailing: isLocked
+                        ? Icon(
+                            Icons.lock_outline,
+                            color: Colors.white.withValues(alpha: 0.7),
+                          )
+                        : provider.currentFontFamily == font
                         ? Icon(Icons.check_circle, color: AppColors.white)
                         : null,
-                    onTap: () {
+                    onTap: () async {
+                      if (isLocked) {
+                        final earned = await showRewardedAdPrompt(
+                          context,
+                          title: 'பிரீமியம் எழுத்துரு',
+                          description:
+                              'இந்த எழுத்துருவை 24 மணி நேரத்திற்கு திறக்க ஒரு குறுகிய விளம்பரத்தைப் பாருங்கள்.',
+                        );
+                        if (!earned || !context.mounted) return;
+                        await RewardUnlockService.instance.grantFonts();
+                        if (!context.mounted) return;
+                      }
                       provider.setFontFamily(font);
                       Navigator.pop(context);
                     },

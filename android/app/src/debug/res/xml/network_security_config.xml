@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Debug builds only.
+
+     Allows plain HTTP to the loopback address so the "update available" dialog
+     can be exercised against a local version.json served through
+     `adb reverse tcp:8099 tcp:8099`.
+
+     Release builds keep the Android default (cleartext blocked), so this file
+     has no effect on the shipped app. -->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">127.0.0.1</domain>
+        <domain includeSubdomains="false">localhost</domain>
+    </domain-config>
+</network-security-config>

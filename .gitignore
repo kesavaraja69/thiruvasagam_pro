@@ -48,3 +48,6 @@ app.*.map.json
 /android/keystore
 /assets
 /encrypt_data.dart
+
+# Local backups (e.g. lib folder snapshots taken before changes)
+/backup/

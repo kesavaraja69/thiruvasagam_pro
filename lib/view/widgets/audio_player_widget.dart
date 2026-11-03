@@ -1,13 +1,14 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:http/http.dart' as http;
-import 'package:thiruvasagampro/utils/ad_helper.dart';
+import 'package:thiruvasagampro/services/reward_unlock_service.dart';
+import 'package:thiruvasagampro/services/secure_audio_store.dart';
 import 'package:thiruvasagampro/utils/app_colors.dart';
-import 'package:thiruvasagampro/utils/app_open_ad_manager.dart';
 import 'package:thiruvasagampro/utils/responsive_theme.dart';
+import 'package:thiruvasagampro/view/widgets/reward_ad_prompt.dart';
 
 String _formatDuration(Duration d) {
   if (d.inHours > 0) {
@@ -20,7 +21,24 @@ class AudioPlayerWidget extends StatefulWidget {
   final String? audioUrl;
   final String? title;
 
-  const AudioPlayerWidget({super.key, this.audioUrl, this.title});
+  /// Optional chapter id, used to identify the downloaded audio file.
+  final int? chapterId;
+
+  /// When true, playback starts automatically as soon as the audio is ready.
+  /// Used to continue playing the next song after the previous one ends.
+  final bool autoPlay;
+
+  /// Called once when the song finishes playing (reaches the end).
+  final VoidCallback? onCompleted;
+
+  const AudioPlayerWidget({
+    super.key,
+    this.audioUrl,
+    this.title,
+    this.chapterId,
+    this.autoPlay = false,
+    this.onCompleted,
+  });
 
   @override
   State<AudioPlayerWidget> createState() => _AudioPlayerWidgetState();
@@ -38,6 +56,30 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
   bool _hasError = false;
   String? _errorMessage;
 
+  /// Decrypted copy used only while this player is active. It is deleted on
+  /// stop, chapter change, and dispose.
+  File? _localFile;
+  bool _isDownloaded = false;
+  bool _isDownloading = false;
+  bool _isStartingPlayback = false;
+  bool _isDisposed = false;
+
+  String get _mediaKey {
+    final id = widget.chapterId;
+    if (id != null) return '$id';
+    final url = widget.audioUrl;
+    if (url == null || url.isEmpty) return 'unknown';
+    final segments = Uri.parse(url).pathSegments;
+    return segments.isEmpty ? 'unknown' : segments.last;
+  }
+
+  /// Set when this widget was created with [AudioPlayerWidget.autoPlay].
+  /// Consumed (set to false) as soon as auto playback is triggered.
+  bool _autoPlayPending = false;
+
+  /// Guards against firing [AudioPlayerWidget.onCompleted] more than once.
+  bool _completionNotified = false;
+
   Duration _currentPosition = Duration.zero;
   Duration _totalDuration = Duration.zero;
 
@@ -46,16 +88,12 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
   StreamSubscription<Duration?>? _durationSub;
   StreamSubscription<bool>? _playingSub;
 
-  // Ad
-  InterstitialAd? _interstitialAd;
-  int _stopCount = 0;
-
   @override
   void initState() {
     super.initState();
+    _autoPlayPending = widget.autoPlay;
     _listenToStreams();
     _checkUrlAvailability();
-    _loadInterstitialAd();
   }
 
   @override
@@ -66,41 +104,11 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
     }
   }
 
-  void _loadInterstitialAd() {
-    InterstitialAd.load(
-      adUnitId: AdHelper.interstitialAdUnitId,
-      request: const AdRequest(),
-      adLoadCallback: InterstitialAdLoadCallback(
-        onAdLoaded: (ad) {
-          ad.fullScreenContentCallback = FullScreenContentCallback(
-            onAdShowedFullScreenContent: (ad) {
-              AppOpenAdManager.pauseAppOpenAd = true;
-            },
-            onAdDismissedFullScreenContent: (ad) {
-              Future.delayed(const Duration(seconds: 1), () {
-                AppOpenAdManager.pauseAppOpenAd = false;
-              });
-              ad.dispose();
-              _loadInterstitialAd();
-            },
-            onAdFailedToShowFullScreenContent: (ad, error) {
-              Future.delayed(const Duration(seconds: 1), () {
-                AppOpenAdManager.pauseAppOpenAd = false;
-              });
-              ad.dispose();
-              _loadInterstitialAd();
-            },
-          );
-          _interstitialAd = ad;
-        },
-        onAdFailedToLoad: (err) =>
-            debugPrint('TTS interstitial failed: ${err.message}'),
-      ),
-    );
-  }
-
   Future<void> _onUrlChanged() async {
     await _audioPlayer.stop();
+    final oldTemp = _localFile;
+    _localFile = null;
+    unawaited(SecureAudioStore.instance.deleteTemp(oldTemp));
     if (!mounted) return;
     setState(() {
       _isPlaying = false;
@@ -110,6 +118,9 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
       _errorMessage = null;
       _currentPosition = Duration.zero;
       _totalDuration = Duration.zero;
+      _completionNotified = false;
+      _localFile = null;
+      _isDownloaded = false;
     });
     await _checkUrlAvailability();
   }
@@ -121,15 +132,24 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
 
     _playerStateSub = _audioPlayer.playerStateStream.listen((state) {
       if (!mounted) return;
+      final completed = state.processingState == ProcessingState.completed;
       setState(() {
         _isBuffering =
             state.processingState == ProcessingState.buffering ||
             state.processingState == ProcessingState.loading;
-        if (state.processingState == ProcessingState.completed) {
+        if (completed) {
           _isPlaying = false;
           _currentPosition = Duration.zero;
         }
       });
+
+      // 🔁 Song finished → let the parent switch to the next song.
+      if (completed && !_completionNotified) {
+        _completionNotified = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) widget.onCompleted?.call();
+        });
+      }
     });
 
     _positionSub = _audioPlayer.positionStream.listen((position) {
@@ -153,48 +173,76 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
 
     if (mounted) setState(() => _isCheckingUrl = true);
 
+    // A downloaded file works with no network at all.
+    final downloaded = await SecureAudioStore.instance.isDownloaded(_mediaKey);
+    final available = downloaded || await _isUrlReachable();
+
+    if (!mounted) return;
+
+    setState(() {
+      _localFile = null;
+      _isDownloaded = downloaded;
+      _urlAvailable = available;
+      _isCheckingUrl = false;
+    });
+
+    // 🎵 Continue the playlist: start this song by itself.
+    if (_autoPlayPending) {
+      _autoPlayPending = false;
+      await _startPlayback();
+    }
+  }
+
+  Future<bool> _isUrlReachable() async {
     try {
       final connectivityResults = await Connectivity().checkConnectivity();
       if (connectivityResults.isEmpty ||
           connectivityResults.contains(ConnectivityResult.none)) {
-        if (mounted) {
-          setState(() {
-            _urlAvailable = false;
-            _isCheckingUrl = false;
-          });
-        }
-        return;
+        return false;
       }
 
       final response = await http.head(Uri.parse(widget.audioUrl!));
-      if (mounted) {
-        setState(() {
-          _urlAvailable = response.statusCode == 200;
-          _isCheckingUrl = false;
-        });
-      }
+      return response.statusCode == 200;
     } catch (e) {
       debugPrint('AudioPlayerWidget: URL check failed: $e');
-      if (mounted) {
-        setState(() {
-          _urlAvailable = false;
-          _isCheckingUrl = false;
-        });
-      }
+      return false;
     }
   }
 
   Future<void> _startPlayback() async {
-    if (!mounted || widget.audioUrl == null || widget.audioUrl!.isEmpty) return;
+    if (!mounted ||
+        _isStartingPlayback ||
+        widget.audioUrl == null ||
+        widget.audioUrl!.isEmpty) {
+      return;
+    }
 
+    _isStartingPlayback = true;
     try {
       setState(() {
         _hasError = false;
         _errorMessage = null;
         _isBuffering = true;
+        _completionNotified = false;
       });
 
-      await _audioPlayer.setUrl(widget.audioUrl!);
+      if (_isDownloaded) {
+        final decrypted = await SecureAudioStore.instance.decryptToTemp(
+          _mediaKey,
+        );
+        if (decrypted == null) {
+          throw StateError('Downloaded audio could not be decrypted');
+        }
+        await SecureAudioStore.instance.deleteTemp(_localFile);
+        _localFile = decrypted;
+        await _audioPlayer.setFilePath(decrypted.path);
+      } else {
+        await _audioPlayer.setUrl(widget.audioUrl!);
+      }
+
+      // The user may have left the screen while the source was loading.
+      if (!mounted || _isDisposed) return;
+
       await _audioPlayer.play();
 
       if (mounted) {
@@ -209,8 +257,18 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
         setState(() {
           _isBuffering = false;
           _hasError = true;
-          _errorMessage = 'Failed to load audio';
+          _errorMessage = _isDownloaded
+              ? 'Could not open downloaded audio'
+              : 'Failed to load audio';
         });
+      }
+    } finally {
+      _isStartingPlayback = false;
+      // If the widget was disposed mid-load, dispose only after the platform
+      // load has settled; disposing while it is in flight can throw inside
+      // just_audio.
+      if (_isDisposed) {
+        await _audioPlayer.dispose();
       }
     }
   }
@@ -221,10 +279,6 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
     try {
       if (_isPlaying) {
         _audioPlayer.pause();
-        _stopCount++;
-        if (_stopCount % 3 == 0 && _interstitialAd != null && mounted) {
-          _interstitialAd!.show();
-        }
       } else if (_isReady) {
         _audioPlayer.play();
       } else {
@@ -240,20 +294,19 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
 
     try {
       _audioPlayer.stop();
-      _stopCount++;
-      if (_stopCount % 2 == 0 && _interstitialAd != null && mounted) {
-        _interstitialAd!.show();
-      }
     } catch (e) {
       debugPrint('AudioPlayerWidget: Stop failed: $e');
     }
 
+    unawaited(SecureAudioStore.instance.deleteTemp(_localFile));
     setState(() {
+      _localFile = null;
       _isPlaying = false;
       _isReady = false;
       _isBuffering = false;
       _currentPosition = Duration.zero;
       _totalDuration = Duration.zero;
+      _autoPlayPending = false;
     });
   }
 
@@ -273,14 +326,94 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
     _audioPlayer.seek(position);
   }
 
+  Future<void> _handleDownloadTap() async {
+    final url = widget.audioUrl;
+    if (url == null || url.isEmpty || _isDownloading) return;
+
+    if (_isDownloaded) {
+      final remove = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('ஆஃப்லைன் பதிவிறக்கம்'),
+          content: const Text('இந்தப் பாடலின் ஆஃப்லைன் பதிவிறக்கத்தை நீக்கவா?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('வேண்டாம்'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('நீக்கு'),
+            ),
+          ],
+        ),
+      );
+      if (remove != true || !mounted) return;
+
+      await SecureAudioStore.instance.delete(_mediaKey);
+      if (!mounted) return;
+      if (!_isPlaying && !_isReady) {
+        unawaited(SecureAudioStore.instance.deleteTemp(_localFile));
+      }
+      setState(() {
+        _isDownloaded = false;
+        if (!_isPlaying && !_isReady) _localFile = null;
+      });
+      _showSnack('ஆஃப்லைன் பதிவிறக்கம் நீக்கப்பட்டது.');
+      return;
+    }
+
+    if (!RewardUnlockService.instance.offlineUnlocked) {
+      final earned = await showRewardedAdPrompt(
+        context,
+        title: 'ஆஃப்லைன் இசை',
+        description:
+            '24 மணி நேரத்திற்கு ஆஃப்லைன் பதிவிறக்கத்தைத் திறக்க ஒரு குறுகிய விளம்பரத்தைப் பாருங்கள்.',
+      );
+      if (!earned || !mounted) return;
+      await RewardUnlockService.instance.grantOffline();
+      if (!mounted) return;
+    }
+
+    setState(() => _isDownloading = true);
+    final ok = await SecureAudioStore.instance.downloadAndEncrypt(
+      key: _mediaKey,
+      url: url,
+    );
+    if (!mounted) return;
+
+    setState(() {
+      _isDownloading = false;
+      _isDownloaded = ok;
+      if (ok) _urlAvailable = true;
+    });
+
+    if (!ok) {
+      _showSnack('பதிவிறக்கம் தோல்வியடைந்தது. இணையத்தைச் சரிபார்க்கவும்.');
+    } else {
+      _showSnack('ஆஃப்லைன் பதிவிறக்கம் முடிந்தது.');
+    }
+  }
+
+  void _showSnack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
   @override
   void dispose() {
+    _isDisposed = true;
     _playerStateSub?.cancel();
     _positionSub?.cancel();
     _durationSub?.cancel();
     _playingSub?.cancel();
     _audioPlayer.stop();
-    _audioPlayer.dispose();
+    if (!_isStartingPlayback) {
+      _audioPlayer.dispose();
+    }
+    unawaited(SecureAudioStore.instance.deleteTemp(_localFile));
     super.dispose();
   }
 
@@ -335,6 +468,8 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
                     ],
                   ),
                 ),
+                SizedBox(width: Responsive.padding(context, 8)),
+                _buildDownloadButton(),
                 if (_isPlaying || _isReady) ...[
                   SizedBox(width: Responsive.padding(context, 8)),
                   _buildControlButton(
@@ -409,10 +544,7 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
     if (_isBuffering && !_isReady) {
       return Padding(
         padding: EdgeInsets.all(Responsive.padding(context, 11)),
-        child: CircularProgressIndicator(
-          color: Colors.white,
-          strokeWidth: 2.5,
-        ),
+        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
       );
     }
     return Icon(
@@ -436,11 +568,14 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
       statusText = 'Loading audio...';
       statusIcon = null;
     } else if (_isPlaying) {
-      statusText = 'Streaming audio';
-      statusIcon = Icons.wifi;
+      statusText = _localFile != null ? 'Playing offline' : 'Streaming audio';
+      statusIcon = _localFile != null ? Icons.offline_pin : Icons.wifi;
     } else if (_isReady) {
-      statusText = 'Paused';
+      statusText = _localFile != null ? 'Paused · offline' : 'Paused';
       statusIcon = Icons.pause;
+    } else if (_isDownloaded) {
+      statusText = 'Downloaded · tap to play offline';
+      statusIcon = Icons.offline_pin;
     } else if (!_urlAvailable) {
       statusText = 'Audio not available offline';
       statusIcon = Icons.wifi_off;
@@ -507,7 +642,8 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
                   0.0,
                   box.size.width - Responsive.padding(context, 32),
                 );
-                final newProgress = dx / (box.size.width - Responsive.padding(context, 32));
+                final newProgress =
+                    dx / (box.size.width - Responsive.padding(context, 32));
                 setState(() {
                   _currentPosition = Duration(
                     milliseconds: (newProgress * _totalDuration.inMilliseconds)
@@ -612,6 +748,29 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
     );
   }
 
+  Widget _buildDownloadButton() {
+    if (_isDownloading) {
+      return SizedBox(
+        width: Responsive.dim(context, 32),
+        height: Responsive.dim(context, 32),
+        child: Padding(
+          padding: EdgeInsets.all(Responsive.padding(context, 7)),
+          child: const CircularProgressIndicator(
+            color: Colors.white,
+            strokeWidth: 2.2,
+          ),
+        ),
+      );
+    }
+
+    return _buildControlButton(
+      icon: _isDownloaded ? Icons.offline_pin : Icons.download_rounded,
+      color: _isDownloaded ? Colors.green.shade700 : AppColors.vintageInk,
+      onTap: _handleDownloadTap,
+      size: Responsive.dim(context, 32),
+    );
+  }
+
   Widget _buildControlButton({
     required IconData icon,
     required Color color,
@@ -637,11 +796,7 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
               ),
             ],
           ),
-          child: Icon(
-            icon,
-            color: Colors.white,
-            size: size * 0.55,
-          ),
+          child: Icon(icon, color: Colors.white, size: size * 0.55),
         ),
       ),
     );

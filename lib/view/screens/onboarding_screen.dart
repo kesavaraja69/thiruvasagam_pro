@@ -202,46 +202,58 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       ],
                     )
                   // ── Portrait: stacked vertically ──
-                  : SingleChildScrollView(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Spacer(),
-                          Image.asset(
-                            _pages[index]['image']!,
-                            height: Responsive.height(context, 160),
-                            fit: BoxFit.contain,
+                  // NOTE: no Spacer()/Expanded here on purpose — a scroll view
+                  // gives unbounded height, so flex children would crash the
+                  // layout. minHeight keeps the content centered when there is
+                  // room and still lets the page scroll when there isn't.
+                  : LayoutBuilder(
+                      builder: (context, viewport) => SingleChildScrollView(
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            minHeight: viewport.maxHeight,
                           ),
-                          SizedBox(height: Responsive.height(context, 6)),
-                          textContent,
-                          SizedBox(height: Responsive.height(context, 25)),
-                          SizedBox(
-                            width: double.infinity,
-                            height: Responsive.height(context, 50),
-                            child: ElevatedButton(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.vintageInk,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(
-                                    Responsive.radius(context, 10),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Image.asset(
+                                _pages[index]['image']!,
+                                height: Responsive.height(context, 160),
+                                fit: BoxFit.contain,
+                              ),
+                              SizedBox(height: Responsive.height(context, 6)),
+                              textContent,
+                              SizedBox(height: Responsive.height(context, 25)),
+                              SizedBox(
+                                width: double.infinity,
+                                height: Responsive.height(context, 50),
+                                child: ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppColors.vintageInk,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(
+                                        Responsive.radius(context, 10),
+                                      ),
+                                    ),
+                                  ),
+                                  onPressed: _onboardingAction,
+                                  child: Text(
+                                    _currentPage == _pages.length - 1
+                                        ? 'தொடங்குங்கள் (Get Started)'
+                                        : 'அடுத்து (Next)',
+                                    style: TextStyle(
+                                      fontSize: Responsive.fontSize(
+                                        context,
+                                        15,
+                                      ),
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                    ),
                                   ),
                                 ),
                               ),
-                              onPressed: _onboardingAction,
-                              child: Text(
-                                _currentPage == _pages.length - 1
-                                    ? 'தொடங்குங்கள் (Get Started)'
-                                    : 'அடுத்து (Next)',
-                                style: TextStyle(
-                                  fontSize: Responsive.fontSize(context, 15),
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
+                            ],
                           ),
-                          const Spacer(),
-                        ],
+                        ),
                       ),
                     ),
             );
