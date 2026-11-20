@@ -33,6 +33,10 @@ class AboutScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final provider = Provider.of<ReadingProvider>(context);
+    final isPhone = Responsive.isPhone(context);
+    final logoSize = isPhone
+        ? Responsive.dim(context, 150)
+        : (Responsive.isTabletLandscape(context) ? 120.0 : 160.0);
     return ParchmentBackground(
       child: EyeProtectionOverlay(
         enabled: provider.eyeProtectionEnabled,
@@ -58,12 +62,8 @@ class AboutScreen extends StatelessWidget {
                             // 1. App Logo & Version
                             Image.asset(
                               AppAssets.logo1,
-                              width: Responsive.isTabletLandscape(context)
-                                  ? Responsive.dim(context, 90)
-                                  : Responsive.dim(context, 150),
-                              height: Responsive.isTabletLandscape(context)
-                                  ? Responsive.dim(context, 90)
-                                  : Responsive.dim(context, 150),
+                              width: logoSize,
+                              height: logoSize,
                             ),
                             SizedBox(height: Responsive.height(context, 2)),
                             Text(

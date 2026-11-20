@@ -17,16 +17,23 @@ class RewardUnlockService extends ChangeNotifier {
   static const String _fontsKey = 'reward_fonts_until';
   static const String _offlineKey = 'reward_offline_until';
   static const String _eyeProtectionKey = 'reward_eye_protection_until';
+  static const String _backgroundAudioKey = 'reward_background_audio_until';
 
   static const Duration adFreeDuration = Duration(minutes: 60);
   static const Duration fontsDuration = Duration(hours: 24);
   static const Duration offlineDuration = Duration(hours: 24);
   static const Duration eyeProtectionDuration = Duration(days: 5);
 
+  /// Background playback pass. After it expires the user is asked to watch
+  /// another rewarded ad the next time they try to leave the app while audio
+  /// is playing.
+  static const Duration backgroundAudioDuration = Duration(hours: 4);
+
   DateTime? _adFreeUntil;
   DateTime? _fontsUntil;
   DateTime? _offlineUntil;
   DateTime? _eyeProtectionUntil;
+  DateTime? _backgroundAudioUntil;
   Timer? _expiryTimer;
 
   DateTime? get adFreeUntil => _adFreeUntil;
@@ -37,11 +44,13 @@ class RewardUnlockService extends ChangeNotifier {
   bool get fontsUnlocked => _isActive(_fontsUntil);
   bool get offlineUnlocked => _isActive(_offlineUntil);
   bool get eyeProtectionEnabled => _isActive(_eyeProtectionUntil);
+  bool get backgroundAudioUnlocked => _isActive(_backgroundAudioUntil);
 
   Duration? get adFreeRemaining => _remaining(_adFreeUntil);
   Duration? get fontsRemaining => _remaining(_fontsUntil);
   Duration? get offlineRemaining => _remaining(_offlineUntil);
   Duration? get eyeProtectionRemaining => _remaining(_eyeProtectionUntil);
+  Duration? get backgroundAudioRemaining => _remaining(_backgroundAudioUntil);
 
   Future<void> initialize() async {
     final prefs = await SharedPreferences.getInstance();
@@ -49,6 +58,7 @@ class RewardUnlockService extends ChangeNotifier {
     _fontsUntil = _readDate(prefs, _fontsKey);
     _offlineUntil = _readDate(prefs, _offlineKey);
     _eyeProtectionUntil = _readDate(prefs, _eyeProtectionKey);
+    _backgroundAudioUntil = _readDate(prefs, _backgroundAudioKey);
     _scheduleExpiry();
     notifyListeners();
   }
@@ -74,6 +84,15 @@ class RewardUnlockService extends ChangeNotifier {
   Future<void> grantEyeProtection() async {
     _eyeProtectionUntil = _extend(_eyeProtectionUntil, eyeProtectionDuration);
     await _save(_eyeProtectionKey, _eyeProtectionUntil!);
+    _afterGrant();
+  }
+
+  Future<void> grantBackgroundAudio() async {
+    _backgroundAudioUntil = _extend(
+      _backgroundAudioUntil,
+      backgroundAudioDuration,
+    );
+    await _save(_backgroundAudioKey, _backgroundAudioUntil!);
     _afterGrant();
   }
 
@@ -117,6 +136,7 @@ class RewardUnlockService extends ChangeNotifier {
       _fontsUntil,
       _offlineUntil,
       _eyeProtectionUntil,
+      _backgroundAudioUntil,
     ]) {
       if (until != null && until.isAfter(now)) {
         if (next == null || until.isBefore(next)) next = until;

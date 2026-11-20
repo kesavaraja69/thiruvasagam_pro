@@ -17,13 +17,45 @@ class AncientBottomNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Compact bottom nav in landscape on tablets to save vertical space
-    final navHeight = Responsive.isTabletLandscape(context)
-        ? Responsive.compactHeight(context, 50)
-        : Responsive.height(context, 50);
-    final iconSize = Responsive.isTabletLandscape(context)
-        ? Responsive.dim(context, 22)
-        : Responsive.dim(context, 28);
+    final isPhone = Responsive.isPhone(context);
+    final isLandscapeTablet = Responsive.isTabletLandscape(context);
+
+    // A fixed, usable height on tablets. Deriving it from the compact height
+    // used to leave the icons larger than the bar itself in landscape.
+    final navHeight = isPhone
+        ? Responsive.height(context, 50)
+        : (isLandscapeTablet ? 56.0 : 64.0);
+    final iconSize = isPhone
+        ? Responsive.dim(context, 28)
+        : (isLandscapeTablet ? 30.0 : 34.0);
+
+    final navItems = Row(
+      mainAxisAlignment: MainAxisAlignment.spaceAround,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        _buildNavItem(
+          context: context,
+          index: 0,
+          outlineIcon: AppAssets.homeOutline,
+          filledIcon: AppAssets.homeFilled,
+          iconSize: iconSize,
+        ),
+        _buildNavItem(
+          context: context,
+          index: 1,
+          outlineIcon: AppAssets.bookOutline,
+          filledIcon: AppAssets.bookFilled,
+          iconSize: iconSize,
+        ),
+        _buildNavItem(
+          context: context,
+          index: 2,
+          outlineIcon: AppAssets.settingsOutline,
+          filledIcon: AppAssets.settingsFilled,
+          iconSize: iconSize,
+        ),
+      ],
+    );
 
     return SafeArea(
       top: false,
@@ -34,39 +66,20 @@ class AncientBottomNav extends StatelessWidget {
           color: AppColors.transparent,
           image: DecorationImage(
             image: AssetImage(AppAssets.navBarPaper),
-            fit: BoxFit.fitWidth,
+            fit: BoxFit.fill,
           ),
         ),
-        child: Padding(
-          padding: EdgeInsets.symmetric(
-            horizontal: Responsive.padding(context, 20),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              _buildNavItem(
-                context: context,
-                index: 0,
-                outlineIcon: AppAssets.homeOutline,
-                filledIcon: AppAssets.homeFilled,
-                iconSize: iconSize,
+        child: Center(
+          child: ConstrainedBox(
+            // Keep the three icons grouped on tablets instead of spreading
+            // them across the full width of a 10" screen.
+            constraints: BoxConstraints(maxWidth: isPhone ? 520 : 560),
+            child: Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: Responsive.padding(context, isPhone ? 20 : 8),
               ),
-              _buildNavItem(
-                context: context,
-                index: 1,
-                outlineIcon: AppAssets.bookOutline,
-                filledIcon: AppAssets.bookFilled,
-                iconSize: iconSize,
-              ),
-              _buildNavItem(
-                context: context,
-                index: 2,
-                outlineIcon: AppAssets.settingsOutline,
-                filledIcon: AppAssets.settingsFilled,
-                iconSize: iconSize,
-              ),
-            ],
+              child: navItems,
+            ),
           ),
         ),
       ),
@@ -83,9 +96,9 @@ class AncientBottomNav extends StatelessWidget {
   }) {
     final bool isActive = currentIndex == index;
     final size = iconSize ?? Responsive.dim(context, 28);
-    final padding = Responsive.isTabletLandscape(context)
-        ? Responsive.padding(context, 6)
-        : Responsive.padding(context, 10);
+    final padding = Responsive.isPhone(context)
+        ? Responsive.padding(context, 10)
+        : 14.0;
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,

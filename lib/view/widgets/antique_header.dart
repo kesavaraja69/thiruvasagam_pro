@@ -1,5 +1,7 @@
 // lib/views/widgets/antique_header.dart
 
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import '../../utils/app_assets.dart';
 import '../../utils/app_colors.dart';
@@ -22,10 +24,18 @@ class AntiqueHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // In landscape on tablets, use a compact header to save vertical space
+    // Tablets get a fixed, comfortable header height instead of stretching the
+    // paper strip to well over 100px. Landscape tablets stay compact so the
+    // content below keeps most of the limited vertical space.
     final headerHeight = Responsive.isTabletLandscape(context)
-        ? Responsive.compactHeight(context, height)
-        : Responsive.height(context, height);
+        ? 64.0
+        : math.min(Responsive.height(context, height), 112.0);
+
+    // Keep the title away from the torn edges and never let a long title
+    // overflow: FittedBox shrinks it instead of painting outside the header.
+    final horizontalPadding = Responsive.isPhone(context)
+        ? Responsive.padding(context, 24)
+        : 64.0;
 
     return Container(
       width: double.infinity,
@@ -37,19 +47,29 @@ class AntiqueHeader extends StatelessWidget {
           fit: BoxFit.fill,
         ),
       ),
-      child: Align(
-        alignment: Alignment.topCenter,
-        child: Padding(
-          padding: EdgeInsets.only(top: Responsive.padding(context, 5)),
-          child: Text(
-            title,
-            style: ResponsiveText.chapterTitle(
-              context,
-              userScale: userScale,
-              fontFamily: fontFamily,
+      child: Padding(
+        padding: EdgeInsets.only(
+          top: Responsive.isTabletLandscape(context)
+              ? 8
+              : Responsive.padding(context, 5),
+          left: horizontalPadding,
+          right: horizontalPadding,
+        ),
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.topCenter,
+            child: Text(
+              title,
+              style: ResponsiveText.chapterTitle(
+                context,
+                userScale: userScale,
+                fontFamily: fontFamily,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
           ),
         ),
       ),

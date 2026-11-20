@@ -2,10 +2,13 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:just_audio_background/just_audio_background.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:http/http.dart' as http;
+import 'package:thiruvasagampro/services/notification_artwork_service.dart';
 import 'package:thiruvasagampro/services/reward_unlock_service.dart';
 import 'package:thiruvasagampro/services/secure_audio_store.dart';
+import 'package:thiruvasagampro/utils/ad_helper.dart';
 import 'package:thiruvasagampro/utils/app_colors.dart';
 import 'package:thiruvasagampro/utils/responsive_theme.dart';
 import 'package:thiruvasagampro/view/widgets/reward_ad_prompt.dart';
@@ -44,7 +47,8 @@ class AudioPlayerWidget extends StatefulWidget {
   State<AudioPlayerWidget> createState() => _AudioPlayerWidgetState();
 }
 
-class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
+class _AudioPlayerWidgetState extends State<AudioPlayerWidget>
+    with WidgetsBindingObserver {
   final AudioPlayer _audioPlayer = AudioPlayer();
 
   bool _isReady = false;
@@ -55,6 +59,13 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
   bool _urlAvailable = false;
   bool _hasError = false;
   String? _errorMessage;
+
+  /// Set while the app is not in the foreground. Background playback is only
+  /// allowed while the opt-in 4-hour rewarded pass is active.
+  bool _isAppInBackground = false;
+  bool _pausedForBackground = false;
+  bool _showResumeUnlockHint = false;
+  bool _backgroundPromptShowing = false;
 
   /// Decrypted copy used only while this player is active. It is deleted on
   /// stop, chapter change, and dispose.
@@ -72,6 +83,15 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
     final segments = Uri.parse(url).pathSegments;
     return segments.isEmpty ? 'unknown' : segments.last;
   }
+
+  /// Metadata shown on the lock screen / media notification when background
+  /// playback is active.
+  MediaItem get _mediaItem => MediaItem(
+    id: _mediaKey,
+    album: 'திருவாசகம்',
+    title: (widget.title?.isNotEmpty ?? false) ? widget.title! : 'திருவாசகம்',
+    artUri: NotificationArtworkService.artUri,
+  );
 
   /// Set when this widget was created with [AudioPlayerWidget.autoPlay].
   /// Consumed (set to false) as soon as auto playback is triggered.
@@ -91,9 +111,168 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    RewardUnlockService.instance.addListener(_onRewardStateChanged);
+    _isAppInBackground =
+        WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed;
     _autoPlayPending = widget.autoPlay;
     _listenToStreams();
     _checkUrlAvailability();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final background =
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.detached;
+    _isAppInBackground = background;
+
+    if (background) {
+      _pauseIfBackgroundLocked();
+      return;
+    }
+
+    if (state == AppLifecycleState.resumed) {
+      if (RewardUnlockService.instance.backgroundAudioUnlocked) {
+        _showResumeUnlockHint = false;
+
+        // The rewarded ad itself backgrounds the app. Only pick playback back
+        // up when the background lock paused it — if the user paused manually
+        // before leaving, acquiring a pass must not start the audio again.
+        if (_pausedForBackground) {
+          _pausedForBackground = false;
+          _resumeAfterUnlock();
+        }
+        return;
+      }
+
+      if (_pausedForBackground) {
+        // Let the resumed frame settle before showing the snackbar.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _offerBackgroundUnlock();
+        });
+      }
+    }
+  }
+
+  /// Stops playback when the user leaves the app without an active background
+  /// pass. This is what makes the rewarded 4-hour pass meaningful: audio can
+  /// keep playing in the background only after the reward is earned.
+  void _pauseIfBackgroundLocked() {
+    if (!mounted || !_isPlaying) return;
+    if (RewardUnlockService.instance.backgroundAudioUnlocked) return;
+
+    _pausedForBackground = true;
+    _showResumeUnlockHint = true;
+    try {
+      _audioPlayer.pause();
+    } catch (e) {
+      debugPrint('AudioPlayerWidget: background pause failed: $e');
+    }
+  }
+
+  void _onRewardStateChanged() {
+    if (!mounted) return;
+
+    // If the 4-hour pass expires while the app is backgrounded, stop playback
+    // instead of letting it continue for free.
+    if (!RewardUnlockService.instance.backgroundAudioUnlocked &&
+        _isAppInBackground &&
+        _isPlaying) {
+      _pausedForBackground = true;
+      _showResumeUnlockHint = true;
+      try {
+        _audioPlayer.pause();
+      } catch (e) {
+        debugPrint('AudioPlayerWidget: expiry pause failed: $e');
+      }
+    }
+
+    setState(() {});
+  }
+
+  void _offerBackgroundUnlock() {
+    if (!mounted ||
+        _backgroundPromptShowing ||
+        !_showResumeUnlockHint ||
+        RewardUnlockService.instance.backgroundAudioUnlocked) {
+      return;
+    }
+    _showResumeUnlockHint = false;
+
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        duration: const Duration(seconds: 8),
+        content: const Text(
+          'பின்னணி இசை நிறுத்தப்பட்டது. 4 மணி நேரத்திற்கு விளம்பரம் பார்த்து திறக்கவும்.',
+        ),
+        action: AdHelper.rewardedAdsAvailable
+            ? SnackBarAction(label: 'திற', onPressed: _requestBackgroundUnlock)
+            : null,
+      ),
+    );
+  }
+
+  Future<void> _requestBackgroundUnlock() async {
+    if (!mounted || _backgroundPromptShowing) return;
+
+    if (RewardUnlockService.instance.backgroundAudioUnlocked) {
+      await _resumeAfterUnlock();
+      return;
+    }
+
+    if (!AdHelper.rewardedAdsAvailable) {
+      _showSnack('பின்னணி இசை இப்போது கிடைக்கவில்லை.');
+      return;
+    }
+
+    _backgroundPromptShowing = true;
+    final earned = await showRewardedAdPrompt(
+      context,
+      title: 'பின்னணி இசை',
+      description:
+          '4 மணி நேரத்திற்கு ஆப்பை விட்டு வெளியேறியும் இசையைக் கேட்க ஒரு குறுகிய விளம்பரத்தைப் பாருங்கள்.',
+    );
+    _backgroundPromptShowing = false;
+
+    if (!mounted) return;
+
+    if (!earned) {
+      _showSnack('பின்னணி இசை திறக்கப்படவில்லை.');
+      return;
+    }
+
+    await RewardUnlockService.instance.grantBackgroundAudio();
+    if (!mounted) return;
+
+    _pausedForBackground = false;
+    _showResumeUnlockHint = false;
+    _showSnack('4 மணி நேரத்திற்கு பின்னணி இசை திறக்கப்பட்டது.');
+    await _resumeAfterUnlock();
+  }
+
+  Future<void> _resumeAfterUnlock() async {
+    if (!mounted || _isAppInBackground || !_isReady || _isPlaying) return;
+    try {
+      await _audioPlayer.play();
+    } catch (e) {
+      debugPrint('AudioPlayerWidget: resume after unlock failed: $e');
+    }
+  }
+
+  Future<void> _handleBackgroundAudioTap() async {
+    final rewards = RewardUnlockService.instance;
+    if (rewards.backgroundAudioUnlocked) {
+      final remaining = rewards.backgroundAudioRemaining;
+      _showSnack(
+        'பின்னணி இசை இயக்கத்தில் உள்ளது · மீதம் ${_formatDuration(remaining ?? Duration.zero)}',
+      );
+      return;
+    }
+    await _requestBackgroundUnlock();
   }
 
   @override
@@ -127,6 +306,15 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
 
   void _listenToStreams() {
     _playingSub = _audioPlayer.playingStream.listen((playing) {
+      // The media notification / headset buttons can also resume playback.
+      // Re-apply the background lock here so they cannot bypass the reward.
+      if (playing &&
+          _isAppInBackground &&
+          !RewardUnlockService.instance.backgroundAudioUnlocked) {
+        _pausedForBackground = true;
+        _showResumeUnlockHint = true;
+        _audioPlayer.pause();
+      }
       if (mounted) setState(() => _isPlaying = playing);
     });
 
@@ -235,9 +423,13 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
         }
         await SecureAudioStore.instance.deleteTemp(_localFile);
         _localFile = decrypted;
-        await _audioPlayer.setFilePath(decrypted.path);
+        await _audioPlayer.setAudioSource(
+          AudioSource.file(decrypted.path, tag: _mediaItem),
+        );
       } else {
-        await _audioPlayer.setUrl(widget.audioUrl!);
+        await _audioPlayer.setAudioSource(
+          AudioSource.uri(Uri.parse(widget.audioUrl!), tag: _mediaItem),
+        );
       }
 
       // The user may have left the screen while the source was loading.
@@ -364,6 +556,10 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
     }
 
     if (!RewardUnlockService.instance.offlineUnlocked) {
+      if (!AdHelper.rewardedAdsAvailable) {
+        _showSnack('ஆஃப்லைன் பதிவிறக்கம் இப்போது கிடைக்கவில்லை.');
+        return;
+      }
       final earned = await showRewardedAdPrompt(
         context,
         title: 'ஆஃப்லைன் இசை',
@@ -405,6 +601,8 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
   @override
   void dispose() {
     _isDisposed = true;
+    WidgetsBinding.instance.removeObserver(this);
+    RewardUnlockService.instance.removeListener(_onRewardStateChanged);
     _playerStateSub?.cancel();
     _positionSub?.cancel();
     _durationSub?.cancel();
@@ -502,7 +700,71 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget> {
                 ],
               ),
             ),
+          _buildBackgroundAudioRow(),
         ],
+      ),
+    );
+  }
+
+  /// Opt-in row for the 4-hour background playback pass. Tapping it when
+  /// locked opens the rewarded-ad explanation; tapping when unlocked shows the
+  /// remaining time.
+  Widget _buildBackgroundAudioRow() {
+    final rewards = RewardUnlockService.instance;
+    final unlocked = rewards.backgroundAudioUnlocked;
+    final remaining = rewards.backgroundAudioRemaining;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: _handleBackgroundAudioTap,
+        child: Container(
+          width: double.infinity,
+          padding: EdgeInsets.fromLTRB(
+            Responsive.padding(context, 16),
+            Responsive.padding(context, 7),
+            Responsive.padding(context, 16),
+            Responsive.padding(context, 9),
+          ),
+          decoration: BoxDecoration(
+            border: Border(
+              top: BorderSide(color: Colors.white.withValues(alpha: 0.15)),
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                unlocked ? Icons.headphones : Icons.lock_outline,
+                color: Colors.white.withValues(alpha: 0.8),
+                size: Responsive.iconSize(context, 14),
+              ),
+              SizedBox(width: Responsive.padding(context, 6)),
+              Flexible(
+                child: Text(
+                  unlocked
+                      ? 'பின்னணி இசை இயக்கத்தில் · மீதம் ${_formatDuration(remaining ?? Duration.zero)}'
+                      : 'பின்னணி இசை · 4 மணி நேரத்திற்கு திறக்க',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.85),
+                    fontSize: Responsive.fontSize(context, 11),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              SizedBox(width: Responsive.padding(context, 4)),
+              Icon(
+                unlocked ? Icons.check_circle : Icons.play_circle_outline,
+                color: unlocked
+                    ? Colors.greenAccent.shade200
+                    : Colors.white.withValues(alpha: 0.8),
+                size: Responsive.iconSize(context, 16),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

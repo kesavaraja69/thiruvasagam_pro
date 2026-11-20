@@ -50,6 +50,12 @@
 # --- package_info_plus plugin ---
 -keep class dev.fluttercommunity.plus.packageinfo.** { *; }
 
+# --- audio_service / just_audio background playback ---
+# The media service builds notification controls reflectively and resolves
+# drawable names at runtime. Keep the plugin classes through R8.
+-keep class com.ryanheise.audioservice.** { *; }
+-keep class com.ryanheise.just_audio.** { *; }
+
 # --- flutter_local_notifications ---
 -keep class com.dexterous.** { *; }
 

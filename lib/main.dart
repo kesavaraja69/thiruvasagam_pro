@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
+import 'package:just_audio_background/just_audio_background.dart';
 import 'package:provider/provider.dart';
 import 'package:thiruvasagampro/services/database_service.dart';
+import 'package:thiruvasagampro/services/notification_artwork_service.dart';
 import 'package:thiruvasagampro/services/notification_service.dart';
 import 'package:thiruvasagampro/services/reward_unlock_service.dart';
 import 'package:thiruvasagampro/services/rewarded_ad_service.dart';
@@ -18,6 +20,19 @@ void main() async {
   WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
   // 2. 🚨 Tell the Native Splash Screen to stay on the screen!
   FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
+  // 3. Prepare background audio playback and the media notification.
+  //    Playback itself is gated behind the opt-in 4-hour rewarded pass in
+  //    AudioPlayerWidget, so this only sets up the platform service.
+  await JustAudioBackground.init(
+    androidNotificationChannelId: 'com.dftacademy.thiruvasagampro.audio',
+    androidNotificationChannelName: 'திருவாசகம் இசை',
+    androidNotificationIcon: 'drawable/ic_stat_audio',
+    artDownscaleWidth: 512,
+    artDownscaleHeight: 512,
+    androidNotificationOngoing: true,
+  );
+  // Expose the bundled app logo to the media notification as a file URI.
+  await NotificationArtworkService.prepare();
   // 1. Unpack, decrypt, and load the database on the very first run
   await DatabaseService.seedDatabaseIfEmpty();
   // 2. Prepare local notifications (daily "read a song" reminder)

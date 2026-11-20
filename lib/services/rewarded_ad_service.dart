@@ -42,11 +42,16 @@ class RewardedAdService {
     if (_ad != null) return Future.value();
     if (_loadFuture != null) return _loadFuture!;
 
+    // No live rewarded unit configured for this platform. Keep the service
+    // idle instead of requesting Google's sample ad in a release build.
+    final adUnitId = AdHelper.rewardedAdUnitId;
+    if (adUnitId == null) return Future.value();
+
     final completer = Completer<void>();
     _loadFuture = completer.future;
 
     RewardedAd.load(
-      adUnitId: AdHelper.rewardedAdUnitId,
+      adUnitId: adUnitId,
       request: const AdRequest(),
       rewardedAdLoadCallback: RewardedAdLoadCallback(
         onAdLoaded: (ad) {

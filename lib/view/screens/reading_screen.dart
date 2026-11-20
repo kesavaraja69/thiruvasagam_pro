@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:thiruvasagampro/utils/app_assets.dart';
 import 'package:thiruvasagampro/utils/app_colors.dart';
+import 'package:thiruvasagampro/utils/ad_helper.dart';
 import 'package:thiruvasagampro/utils/responsive_theme.dart';
 import 'package:thiruvasagampro/view/widgets/app_snackbars.dart';
 import 'package:thiruvasagampro/view/widgets/custom_banner_ad.dart'
@@ -35,6 +36,14 @@ class _ReadingScreenState extends State<ReadingScreen> {
   bool _isAudioAvailable = false;
   bool _isCheckingAudio = true;
   int? _lastCheckedChapterId;
+
+  /// Keeps the same AudioPlayer (and its background service) alive when the
+  /// layout switches between portrait and landscape. Without a global key the
+  /// player would be disposed and recreated, which just_audio_background does
+  /// not allow while another player instance still exists.
+  final GlobalKey _audioPlayerKey = GlobalKey(
+    debugLabel: 'reading-audio-player',
+  );
 
   /// True while we are switching songs because the previous one finished.
   /// The next [AudioPlayerWidget] reads this and starts playing on its own.
@@ -283,110 +292,149 @@ class _ReadingScreenState extends State<ReadingScreen> {
                         ),
                       ),
                     ),
+                    // Top banner: first thing in the reading area.
+                    CustomBannerAd(adUnitId: AdHelper.readingBannerAdUnitId),
                     // 3. Action Toolbar (A-, A+, Copy, Share, Tt)
-                    Padding(
-                      padding: EdgeInsets.symmetric(
-                        vertical: Responsive.padding(context, 2),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          _buildImageBtn(AppAssets.iconFontDec, () {
-                            provider.decreaseFont();
-                          }),
-                          _buildImageBtn(AppAssets.iconFontInc, () {
-                            provider.increaseFont();
-                          }),
-                          _buildImageBtn(AppAssets.iconCopy, () {
-                            provider.copyToClipboard();
-                            if (context.mounted) {
-                              AppSnackBars.showBar(
-                                context,
-                                title: "பாடல் நகலெடுக்கப்பட்டது (Copied)",
-                              );
-                            }
-                          }),
-                          _buildImageBtn(AppAssets.iconShare, () {
-                            provider.shareSong();
-                          }),
-                          _buildImageBtn(AppAssets.iconFontChange, () {
-                            _showFontPicker(context, provider);
-                          }),
-                        ],
+                    Center(
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxWidth: Responsive.readingMaxWidth(context),
+                        ),
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(
+                            vertical: Responsive.padding(context, 2),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                            children: [
+                              _buildImageBtn(AppAssets.iconFontDec, () {
+                                provider.decreaseFont();
+                              }),
+                              _buildImageBtn(AppAssets.iconFontInc, () {
+                                provider.increaseFont();
+                              }),
+                              _buildImageBtn(AppAssets.iconCopy, () {
+                                provider.copyToClipboard();
+                                if (context.mounted) {
+                                  AppSnackBars.showBar(
+                                    context,
+                                    title: "பாடல் நகலெடுக்கப்பட்டது (Copied)",
+                                  );
+                                }
+                              }),
+                              _buildImageBtn(AppAssets.iconShare, () {
+                                provider.shareSong();
+                              }),
+                              _buildImageBtn(AppAssets.iconFontChange, () {
+                                _showFontPicker(context, provider);
+                              }),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
 
-                    Padding(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: Responsive.padding(context, 12),
-                      ),
-                      child: SizedBox(
-                        height: Responsive.height(context, 35),
-                        width: double.infinity,
-                        child: Stack(
-                          children: [
-                            Image.asset(
-                              AppAssets.topOrnament,
-                              fit: BoxFit.fill,
+                    Center(
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxWidth: Responsive.readingMaxWidth(context),
+                        ),
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: Responsive.contentPadding(
+                              context,
+                              Responsive.padding(context, 9),
+                              tabletValue: 0,
                             ),
-                            Padding(
-                              padding: EdgeInsets.symmetric(
-                                horizontal: Responsive.padding(context, 20),
-                                vertical: Responsive.padding(context, 8),
-                              ),
-                              child: Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  GestureDetector(
-                                    onTap: () =>
-                                        provider.previousChapter(context),
-                                    child: Text(
-                                      '← முந்தைய',
-                                      style: _navTextStyle(
-                                        provider.hasPrevious,
+                          ),
+                          child: SizedBox(
+                            height: Responsive.height(context, 37),
+                            width: double.infinity,
+                            child: Stack(
+                              children: [
+                                Image.asset(
+                                  AppAssets.topOrnament,
+                                  fit: BoxFit.fill,
+                                ),
+                                Padding(
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: Responsive.padding(context, 20),
+                                    vertical: Responsive.padding(context, 6),
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      GestureDetector(
+                                        onTap: () =>
+                                            provider.previousChapter(context),
+                                        child: Text(
+                                          '← முந்தைய',
+                                          style: _navTextStyle(
+                                            provider.hasPrevious,
+                                          ),
+                                        ),
                                       ),
-                                    ),
-                                  ),
-                                  Text(
-                                    'பாடல் ${provider.currentChapter.id ?? widget.chapterId}/51',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: Responsive.fontSize(
-                                        context,
-                                        15,
+                                      Text(
+                                        'பாடல் ${provider.currentChapter.id ?? widget.chapterId}/51',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: Responsive.fontSize(
+                                            context,
+                                            15,
+                                          ),
+                                        ),
                                       ),
-                                    ),
+                                      GestureDetector(
+                                        onTap: () =>
+                                            provider.nextChapter(context),
+                                        child: Text(
+                                          'அடுத்த →',
+                                          style: _navTextStyle(
+                                            provider.hasNext,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                  GestureDetector(
-                                    onTap: () => provider.nextChapter(context),
-                                    child: Text(
-                                      'அடுத்த →',
-                                      style: _navTextStyle(provider.hasNext),
-                                    ),
-                                  ),
-                                ],
-                              ),
+                                ),
+                              ],
                             ),
-                          ],
+                          ),
                         ),
                       ),
                     ),
 
                     // 5. Scrollable Lyrics Content
                     Expanded(
-                      child: SingleChildScrollView(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: Responsive.padding(context, 20),
-                        ),
-                        child: Text(
-                          provider.currentChapter.song,
-                          style: TextStyle(
-                            fontSize: provider.fontSize,
-                            fontFamily: provider.currentFontFamily,
-                            color: Colors.black,
-                            fontWeight: FontWeight.w800,
-                            height: 1.6,
+                      child: Center(
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxWidth: Responsive.readingMaxWidth(context),
+                          ),
+                          child: SingleChildScrollView(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: Responsive.contentPadding(
+                                context,
+                                Responsive.padding(context, 20),
+                                tabletValue: 28,
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Text(
+                                  provider.currentChapter.song,
+                                  style: TextStyle(
+                                    fontSize: provider.fontSize,
+                                    fontFamily: provider.currentFontFamily,
+                                    color: Colors.black,
+                                    fontWeight: FontWeight.w800,
+                                    height: 1.6,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ),
@@ -394,95 +442,132 @@ class _ReadingScreenState extends State<ReadingScreen> {
 
                     // 6. Audio Players Section
                     if (provider.currentChapter.song.isNotEmpty)
-                      Container(
-                        padding: EdgeInsets.only(
-                          top: Responsive.padding(context, 8),
-                        ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (_isCheckingAudio)
-                              Padding(
-                                padding: EdgeInsets.symmetric(
-                                  horizontal: Responsive.padding(context, 12),
-                                  vertical: Responsive.padding(context, 4),
-                                ),
-                                child: Container(
-                                  padding: EdgeInsets.all(
-                                    Responsive.padding(context, 12),
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.dividerBrown.withValues(
-                                      alpha: 0.8,
+                      Center(
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxWidth: Responsive.readingMaxWidth(context),
+                          ),
+                          child: Container(
+                            padding: EdgeInsets.only(
+                              top: Responsive.padding(context, 8),
+                            ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (_isCheckingAudio)
+                                  Padding(
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: Responsive.padding(
+                                        context,
+                                        12,
+                                      ),
+                                      vertical: Responsive.padding(context, 4),
                                     ),
-                                    borderRadius: BorderRadius.circular(
-                                      Responsive.radius(context, 16),
-                                    ),
-                                  ),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      SizedBox(
-                                        width: Responsive.dim(context, 16),
-                                        height: Responsive.dim(context, 16),
-                                        child: CircularProgressIndicator(
-                                          color: Colors.white.withValues(
-                                            alpha: 0.7,
-                                          ),
-                                          strokeWidth: 2,
+                                    child: Container(
+                                      padding: EdgeInsets.all(
+                                        Responsive.padding(context, 12),
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.dividerBrown
+                                            .withValues(alpha: 0.8),
+                                        borderRadius: BorderRadius.circular(
+                                          Responsive.radius(context, 16),
                                         ),
                                       ),
-                                      SizedBox(
-                                        width: Responsive.padding(context, 8),
-                                      ),
-                                      Text(
-                                        'Checking audio...',
-                                        style: TextStyle(
-                                          color: Colors.white.withValues(
-                                            alpha: 0.7,
+                                      child: Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          SizedBox(
+                                            width: Responsive.dim(context, 16),
+                                            height: Responsive.dim(context, 16),
+                                            child: CircularProgressIndicator(
+                                              color: Colors.white.withValues(
+                                                alpha: 0.7,
+                                              ),
+                                              strokeWidth: 2,
+                                            ),
                                           ),
-                                          fontSize: Responsive.fontSize(
-                                            context,
-                                            12,
+                                          SizedBox(
+                                            width: Responsive.padding(
+                                              context,
+                                              8,
+                                            ),
                                           ),
-                                        ),
+                                          Text(
+                                            'Checking audio...',
+                                            style: TextStyle(
+                                              color: Colors.white.withValues(
+                                                alpha: 0.7,
+                                              ),
+                                              fontSize: Responsive.fontSize(
+                                                context,
+                                                12,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
                                       ),
-                                    ],
+                                    ),
+                                  )
+                                else if (_isAudioAvailable)
+                                  Padding(
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: Responsive.padding(
+                                        context,
+                                        12,
+                                      ),
+                                      vertical: Responsive.padding(context, 4),
+                                    ),
+                                    child: AudioPlayerWidget(
+                                      key: _audioPlayerKey,
+                                      audioUrl:
+                                          provider.currentChapter.id != null
+                                          ? 'https://thiruvasagam.dftacademy.in/song${provider.currentChapter.id}.mp3'
+                                          : null,
+                                      chapterId: provider.currentChapter.id,
+                                      title: provider.currentChapter.title,
+                                      autoPlay: _autoPlayNext,
+                                      onCompleted: _handleAudioCompleted,
+                                    ),
+                                  )
+                                else
+                                  Padding(
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: Responsive.padding(
+                                        context,
+                                        12,
+                                      ),
+                                      vertical: Responsive.padding(context, 4),
+                                    ),
+                                    child: TTSPlayerWidget(
+                                      textToSpeak: provider.currentChapter.song,
+                                      title: provider.currentChapter.title,
+                                    ),
                                   ),
-                                ),
-                              )
-                            else if (_isAudioAvailable)
-                              Padding(
-                                padding: EdgeInsets.symmetric(
-                                  horizontal: Responsive.padding(context, 12),
-                                  vertical: Responsive.padding(context, 4),
-                                ),
-                                child: AudioPlayerWidget(
-                                  audioUrl: provider.currentChapter.id != null
-                                      ? 'https://thiruvasagam.dftacademy.in/song${provider.currentChapter.id}.mp3'
-                                      : null,
-                                  chapterId: provider.currentChapter.id,
-                                  title: provider.currentChapter.title,
-                                  autoPlay: _autoPlayNext,
-                                  onCompleted: _handleAudioCompleted,
-                                ),
-                              )
-                            else
-                              Padding(
-                                padding: EdgeInsets.symmetric(
-                                  horizontal: Responsive.padding(context, 12),
-                                  vertical: Responsive.padding(context, 4),
-                                ),
-                                child: TTSPlayerWidget(
-                                  textToSpeak: provider.currentChapter.song,
-                                  title: provider.currentChapter.title,
-                                ),
-                              ),
-                          ],
+                              ],
+                            ),
+                          ),
                         ),
                       ),
 
-                    const CustomBannerAd(),
+                    Center(
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxWidth: Responsive.readingMaxWidth(context),
+                        ),
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: Responsive.contentPadding(
+                              context,
+                              Responsive.padding(context, 2),
+                              tabletValue: 16,
+                            ),
+                          ),
+                          child: const CustomBannerAd(),
+                        ),
+                      ),
+                    ),
                   ],
                 );
               },
@@ -500,7 +585,7 @@ class _ReadingScreenState extends State<ReadingScreen> {
       children: [
         // Compact header bar with back, title, bookmark all in one row
         Container(
-          height: Responsive.compactHeight(context, 60),
+          height: 64,
           decoration: const BoxDecoration(
             color: AppColors.transparent,
             image: DecorationImage(
@@ -562,12 +647,12 @@ class _ReadingScreenState extends State<ReadingScreen> {
         ),
 
         // Toolbar + Navigation in a single compact row
-        Padding(
-          padding: EdgeInsets.symmetric(
-            horizontal: Responsive.padding(context, 12),
-          ),
-          child: SizedBox(
-            height: Responsive.compactHeight(context, 35),
+        SizedBox(
+          height: 56,
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: Responsive.padding(context, 12),
+            ),
             child: Row(
               children: [
                 // Prev chapter
@@ -640,15 +725,22 @@ class _ReadingScreenState extends State<ReadingScreen> {
                   horizontal: Responsive.padding(context, 24),
                   vertical: Responsive.padding(context, 8),
                 ),
-                child: Text(
-                  provider.currentChapter.song,
-                  style: TextStyle(
-                    fontSize: provider.fontSize,
-                    fontFamily: provider.currentFontFamily,
-                    color: Colors.black,
-                    fontWeight: FontWeight.w800,
-                    height: 1.6,
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Top banner, same placement as the portrait layout.
+                    CustomBannerAd(adUnitId: AdHelper.readingBannerAdUnitId),
+                    Text(
+                      provider.currentChapter.song,
+                      style: TextStyle(
+                        fontSize: provider.fontSize,
+                        fontFamily: provider.currentFontFamily,
+                        color: Colors.black,
+                        fontWeight: FontWeight.w800,
+                        height: 1.6,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -657,35 +749,46 @@ class _ReadingScreenState extends State<ReadingScreen> {
 
         // Audio player — compact in landscape
         if (provider.currentChapter.song.isNotEmpty)
-          Padding(
-            padding: EdgeInsets.symmetric(
-              horizontal: Responsive.padding(context, 12),
-            ),
-            child: _isCheckingAudio
-                ? Padding(
-                    padding: EdgeInsets.all(Responsive.padding(context, 6)),
-                    child: Text(
-                      'Checking audio...',
-                      style: TextStyle(
-                        color: Colors.black38,
-                        fontSize: Responsive.fontSize(context, 11),
+          Center(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: Responsive.readingMaxWidth(context),
+              ),
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  Responsive.padding(context, 12),
+                  0,
+                  Responsive.padding(context, 12),
+                  Responsive.padding(context, 8),
+                ),
+                child: _isCheckingAudio
+                    ? Padding(
+                        padding: EdgeInsets.all(Responsive.padding(context, 6)),
+                        child: Text(
+                          'Checking audio...',
+                          style: TextStyle(
+                            color: Colors.black38,
+                            fontSize: Responsive.fontSize(context, 11),
+                          ),
+                        ),
+                      )
+                    : _isAudioAvailable
+                    ? AudioPlayerWidget(
+                        key: _audioPlayerKey,
+                        audioUrl: provider.currentChapter.id != null
+                            ? 'https://thiruvasagam.dftacademy.in/song${provider.currentChapter.id}.mp3'
+                            : null,
+                        chapterId: provider.currentChapter.id,
+                        title: provider.currentChapter.title,
+                        autoPlay: _autoPlayNext,
+                        onCompleted: _handleAudioCompleted,
+                      )
+                    : TTSPlayerWidget(
+                        textToSpeak: provider.currentChapter.song,
+                        title: provider.currentChapter.title,
                       ),
-                    ),
-                  )
-                : _isAudioAvailable
-                ? AudioPlayerWidget(
-                    audioUrl: provider.currentChapter.id != null
-                        ? 'https://thiruvasagam.dftacademy.in/song${provider.currentChapter.id}.mp3'
-                        : null,
-                    chapterId: provider.currentChapter.id,
-                    title: provider.currentChapter.title,
-                    autoPlay: _autoPlayNext,
-                    onCompleted: _handleAudioCompleted,
-                  )
-                : TTSPlayerWidget(
-                    textToSpeak: provider.currentChapter.song,
-                    title: provider.currentChapter.title,
-                  ),
+              ),
+            ),
           ),
 
         const CustomBannerAd(),
@@ -695,15 +798,16 @@ class _ReadingScreenState extends State<ReadingScreen> {
 
   // Helper for all those image buttons
   Widget _buildImageBtn(String assetPath, VoidCallback onTap) {
+    final isPhone = Responsive.isPhone(context);
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: Padding(
-        padding: EdgeInsets.all(Responsive.padding(context, 6)),
+        padding: EdgeInsets.all(isPhone ? Responsive.padding(context, 6) : 9),
         child: Image.asset(
           assetPath,
-          width: Responsive.dim(context, 30),
-          height: Responsive.dim(context, 30),
+          width: isPhone ? Responsive.dim(context, 30) : 30,
+          height: isPhone ? Responsive.dim(context, 30) : 30,
           fit: BoxFit.contain,
         ),
       ),
@@ -711,15 +815,16 @@ class _ReadingScreenState extends State<ReadingScreen> {
   }
 
   Widget _buildImageBtntb(String assetPath, VoidCallback onTap) {
+    final isPhone = Responsive.isPhone(context);
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: Padding(
-        padding: EdgeInsets.all(Responsive.padding(context, 6)),
+        padding: EdgeInsets.all(isPhone ? Responsive.padding(context, 6) : 9),
         child: Image.asset(
           assetPath,
-          width: Responsive.dim(context, 38),
-          height: Responsive.dim(context, 38),
+          width: isPhone ? Responsive.dim(context, 38) : 34,
+          height: isPhone ? Responsive.dim(context, 38) : 34,
           fit: BoxFit.contain,
         ),
       ),
@@ -798,6 +903,18 @@ class _ReadingScreenState extends State<ReadingScreen> {
                         : null,
                     onTap: () async {
                       if (isLocked) {
+                        if (!AdHelper.rewardedAdsAvailable) {
+                          final messenger = ScaffoldMessenger.of(context);
+                          Navigator.pop(context);
+                          messenger.showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'பிரீமியம் எழுத்துருக்கள் இப்போது கிடைக்கவில்லை.',
+                              ),
+                            ),
+                          );
+                          return;
+                        }
                         final earned = await showRewardedAdPrompt(
                           context,
                           title: 'பிரீமியம் எழுத்துரு',

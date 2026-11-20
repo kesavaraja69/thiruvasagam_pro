@@ -73,199 +73,225 @@ class SettingsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isPhone = Responsive.isPhone(context);
+
     return Scaffold(
       backgroundColor: Colors.transparent,
-      body: Center(
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxWidth: Responsive.readingMaxWidth(context),
-          ),
-          child: ListView(
-            padding: EdgeInsets.only(bottom: Responsive.padding(context, 100)),
-            children: [
-              AntiqueHeader(title: 'அமைப்புகள் (Settings)'),
-
-              // Second banner unit, visible directly under the header and
-              // separated from the first tappable setting row.
-              Padding(
-                padding: EdgeInsets.fromLTRB(
-                  Responsive.padding(context, 12),
-                  Responsive.padding(context, 4),
-                  Responsive.padding(context, 12),
-                  Responsive.padding(context, 16),
+      body: Column(
+        children: [
+          AntiqueHeader(title: 'அமைப்புகள் (Settings)'),
+          Expanded(
+            child: Center(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: Responsive.contentMaxWidth(context),
                 ),
-                child: CustomBannerAd(adUnitId: AdHelper.inlineBannerAdUnitId),
-              ),
-
-              // ===== READ MODE SECTION =====
-              _buildSectionHeader(context, '📖 படிப்பு முறை (Read Mode)'),
-
-              // Eye Protection Toggle
-              Consumer<ReadingProvider>(
-                builder: (context, provider, child) {
-                  return _buildSwitchItem(
-                    context: context,
-                    icon: Icons.remove_red_eye_outlined,
-                    title: 'கண் பாதுகாப்பு (Eye Protection)',
-                    subtitle: provider.eyeProtectionEnabled
-                        ? 'ON · மீதம் ${_formatRemaining(RewardUnlockService.instance.eyeProtectionRemaining)}'
-                        : 'OFF · விளம்பரம் பார்த்து 5 நாட்களுக்கு திறக்க',
-                    value: provider.eyeProtectionEnabled,
-                    onChanged: (value) =>
-                        _handleEyeProtectionToggle(context, provider, value),
-                  );
-                },
-              ),
-              _buildDivider(context),
-
-              // Warmth & Dimness sliders (only when eye protection is enabled)
-              Consumer<ReadingProvider>(
-                builder: (context, provider, child) {
-                  if (!provider.eyeProtectionEnabled) {
-                    return const SizedBox.shrink();
-                  }
-                  return Column(
-                    children: [
-                      // Warmth slider
-                      _buildSliderItem(
-                        context: context,
-                        icon: Icons.wb_sunny_outlined,
-                        title: 'வெப்பம் (Warmth)',
-                        value: provider.eyeWarmth,
-                        min: 0.0,
-                        max: 1.0,
-                        onChanged: (val) => provider.setEyeWarmth(val),
-                      ),
-                      _buildDivider(context),
-
-                      // Dimness slider
-                      _buildSliderItem(
-                        context: context,
-                        icon: Icons.brightness_low_outlined,
-                        title: 'மங்கல் (Dimness)',
-                        value: provider.eyeDimness,
-                        min: 0.0,
-                        max: 0.6,
-                        onChanged: (val) => provider.setEyeDimness(val),
-                      ),
-                      _buildDivider(context),
-                    ],
-                  );
-                },
-              ),
-
-              // ===== AUDIO SECTION =====
-              _buildSectionHeader(context, '🔊 இசை (Audio)'),
-
-              // Continuous Play Toggle (auto-advance to the next song)
-              Consumer<ReadingProvider>(
-                builder: (context, provider, child) {
-                  return _buildSwitchItem(
-                    context: context,
-                    icon: Icons.play_circle_outline,
-                    title: 'தொடர் இசை (Continuous Play)',
-                    subtitle: provider.continuousPlayEnabled
-                        ? 'ON · பாடல் முடிந்ததும் அடுத்தது தானாக இயங்கும்'
-                        : 'OFF',
-                    value: provider.continuousPlayEnabled,
-                    onChanged: (_) => provider.toggleContinuousPlay(),
-                  );
-                },
-              ),
-              _buildDivider(context),
-
-              // ===== REMINDER SECTION =====
-              _buildSectionHeader(context, '🔔 நினைவூட்டல் (Reminder)'),
-
-              Consumer<ReadingProvider>(
-                builder: (context, provider, child) {
-                  return Column(
-                    children: [
-                      _buildSwitchItem(
-                        context: context,
-                        icon: Icons.notifications_active_outlined,
-                        title: 'தினசரி நினைவூட்டல் (Daily Reminder)',
-                        subtitle: provider.reminderEnabled
-                            ? 'ON · ${provider.reminderTime.format(context)}'
-                            : 'OFF',
-                        value: provider.reminderEnabled,
-                        onChanged: (value) => provider.toggleReminder(value),
-                      ),
-                      if (provider.reminderEnabled) ...[
-                        _buildDivider(context),
-                        _buildSettingsItem(
-                          context: context,
-                          icon: Icons.access_time,
-                          title:
-                              'நேரம் (Time): ${provider.reminderTime.format(context)}',
-                          onTap: () => _pickReminderTime(context, provider),
+                child: ListView(
+                  padding: EdgeInsets.only(
+                    bottom: isPhone ? Responsive.padding(context, 100) : 120,
+                  ),
+                  children: [
+                    // Second banner unit, visible directly under the header
+                    // and separated from the first tappable setting row.
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(
+                        Responsive.contentPadding(
+                          context,
+                          Responsive.padding(context, 12),
+                          tabletValue: 16,
                         ),
-                      ],
-                    ],
-                  );
-                },
-              ),
-              _buildDivider(context),
+                        Responsive.padding(context, 4),
+                        Responsive.contentPadding(
+                          context,
+                          Responsive.padding(context, 12),
+                          tabletValue: 16,
+                        ),
+                        isPhone ? Responsive.padding(context, 16) : 8,
+                      ),
+                      child: CustomBannerAd(
+                        adUnitId: AdHelper.inlineBannerAdUnitId,
+                      ),
+                    ),
 
-              // ===== REWARDS SECTION =====
-              _buildSectionHeader(context, '🎁 வெகுமதிகள் (Rewards)'),
-              _buildRewardsSection(context),
-              _buildDivider(context),
+                    // ===== READ MODE SECTION =====
+                    _buildSectionHeader(context, '📖 படிப்பு முறை (Read Mode)'),
 
-              // ===== GENERAL SECTION =====
-              _buildSectionHeader(context, '📋 பொது (General)'),
+                    // Eye Protection Toggle
+                    Consumer<ReadingProvider>(
+                      builder: (context, provider, child) {
+                        return _buildSwitchItem(
+                          context: context,
+                          icon: Icons.remove_red_eye_outlined,
+                          title: 'கண் பாதுகாப்பு (Eye Protection)',
+                          subtitle: provider.eyeProtectionEnabled
+                              ? 'ON · மீதம் ${_formatRemaining(RewardUnlockService.instance.eyeProtectionRemaining)}'
+                              : 'OFF · விளம்பரம் பார்த்து 5 நாட்களுக்கு திறக்க',
+                          value: provider.eyeProtectionEnabled,
+                          onChanged: (value) => _handleEyeProtectionToggle(
+                            context,
+                            provider,
+                            value,
+                          ),
+                        );
+                      },
+                    ),
+                    _buildDivider(context),
 
-              _buildSettingsItem(
-                context: context,
-                icon: Icons.info_outline,
-                title: 'எங்களை பற்றி (About)',
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const AboutScreen()),
+                    // Warmth & Dimness sliders (only when eye protection is enabled)
+                    Consumer<ReadingProvider>(
+                      builder: (context, provider, child) {
+                        if (!provider.eyeProtectionEnabled) {
+                          return const SizedBox.shrink();
+                        }
+                        return Column(
+                          children: [
+                            // Warmth slider
+                            _buildSliderItem(
+                              context: context,
+                              icon: Icons.wb_sunny_outlined,
+                              title: 'வெப்பம் (Warmth)',
+                              value: provider.eyeWarmth,
+                              min: 0.0,
+                              max: 1.0,
+                              onChanged: (val) => provider.setEyeWarmth(val),
+                            ),
+                            _buildDivider(context),
+
+                            // Dimness slider
+                            _buildSliderItem(
+                              context: context,
+                              icon: Icons.brightness_low_outlined,
+                              title: 'மங்கல் (Dimness)',
+                              value: provider.eyeDimness,
+                              min: 0.0,
+                              max: 0.6,
+                              onChanged: (val) => provider.setEyeDimness(val),
+                            ),
+                            _buildDivider(context),
+                          ],
+                        );
+                      },
+                    ),
+
+                    // ===== AUDIO SECTION =====
+                    _buildSectionHeader(context, '🔊 இசை (Audio)'),
+
+                    // Continuous Play Toggle (auto-advance to the next song)
+                    Consumer<ReadingProvider>(
+                      builder: (context, provider, child) {
+                        return _buildSwitchItem(
+                          context: context,
+                          icon: Icons.play_circle_outline,
+                          title: 'தொடர் இசை (Continuous Play)',
+                          subtitle: provider.continuousPlayEnabled
+                              ? 'ON · பாடல் முடிந்ததும் அடுத்தது தானாக இயங்கும்'
+                              : 'OFF',
+                          value: provider.continuousPlayEnabled,
+                          onChanged: (_) => provider.toggleContinuousPlay(),
+                        );
+                      },
+                    ),
+                    _buildDivider(context),
+
+                    // ===== REMINDER SECTION =====
+                    _buildSectionHeader(context, '🔔 நினைவூட்டல் (Reminder)'),
+
+                    Consumer<ReadingProvider>(
+                      builder: (context, provider, child) {
+                        return Column(
+                          children: [
+                            _buildSwitchItem(
+                              context: context,
+                              icon: Icons.notifications_active_outlined,
+                              title: 'தினசரி நினைவூட்டல் (Daily Reminder)',
+                              subtitle: provider.reminderEnabled
+                                  ? 'ON · ${provider.reminderTime.format(context)}'
+                                  : 'OFF',
+                              value: provider.reminderEnabled,
+                              onChanged: (value) =>
+                                  provider.toggleReminder(value),
+                            ),
+                            if (provider.reminderEnabled) ...[
+                              _buildDivider(context),
+                              _buildSettingsItem(
+                                context: context,
+                                icon: Icons.access_time,
+                                title:
+                                    'நேரம் (Time): ${provider.reminderTime.format(context)}',
+                                onTap: () =>
+                                    _pickReminderTime(context, provider),
+                              ),
+                            ],
+                          ],
+                        );
+                      },
+                    ),
+                    _buildDivider(context),
+
+                    // ===== REWARDS SECTION =====
+                    _buildSectionHeader(context, '🎁 வெகுமதிகள் (Rewards)'),
+                    _buildRewardsSection(context),
+                    _buildDivider(context),
+
+                    // ===== GENERAL SECTION =====
+                    _buildSectionHeader(context, '📋 பொது (General)'),
+
+                    _buildSettingsItem(
+                      context: context,
+                      icon: Icons.info_outline,
+                      title: 'எங்களை பற்றி (About)',
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const AboutScreen(),
+                        ),
+                      ),
+                    ),
+                    _buildDivider(context),
+
+                    _buildSettingsItem(
+                      context: context,
+                      icon: Icons.privacy_tip_outlined,
+                      title: 'தனியுரிமைக் கொள்கை (Privacy Policy)',
+                      onTap: () => _launchURL(
+                        'https://doc-hosting.flycricket.io/thiruvasagam-pro-privacy-policies/d92f049d-6945-49af-8daf-1b06db75bfdf/privacy',
+                      ),
+                    ),
+                    _buildDivider(context),
+
+                    _buildSettingsItem(
+                      context: context,
+                      icon: Icons.tune,
+                      title: 'விளம்பர தனியுரிமை (Ad privacy settings)',
+                      onTap: () => _openAdPrivacySettings(context),
+                    ),
+                    _buildDivider(context),
+
+                    _buildSettingsItem(
+                      context: context,
+                      icon: Icons.description_outlined,
+                      title: 'விதிமுறைகள் (Terms & Conditions)',
+                      onTap: () => _launchURL(
+                        'https://doc-hosting.flycricket.io/thiruvasagam-pro-terms-and-conditions/04b14714-6a57-4070-a967-1c0870400a96/terms',
+                      ),
+                    ),
+                    _buildDivider(context),
+
+                    _buildSettingsItem(
+                      context: context,
+                      icon: Icons.mail_outline,
+                      title: 'தொடர்புக்கு (Contact Us)',
+                      onTap: _launchEmail,
+                    ),
+                    _buildDivider(context),
+
+                    SizedBox(height: Responsive.height(context, 15)),
+                  ],
                 ),
               ),
-              _buildDivider(context),
-
-              _buildSettingsItem(
-                context: context,
-                icon: Icons.privacy_tip_outlined,
-                title: 'தனியுரிமைக் கொள்கை (Privacy Policy)',
-                onTap: () => _launchURL(
-                  'https://doc-hosting.flycricket.io/thiruvasagam-pro-privacy-policies/d92f049d-6945-49af-8daf-1b06db75bfdf/privacy',
-                ),
-              ),
-              _buildDivider(context),
-
-              _buildSettingsItem(
-                context: context,
-                icon: Icons.tune,
-                title: 'விளம்பர தனியுரிமை (Ad privacy settings)',
-                onTap: () => _openAdPrivacySettings(context),
-              ),
-              _buildDivider(context),
-
-              _buildSettingsItem(
-                context: context,
-                icon: Icons.description_outlined,
-                title: 'விதிமுறைகள் (Terms & Conditions)',
-                onTap: () => _launchURL(
-                  'https://doc-hosting.flycricket.io/thiruvasagam-pro-terms-and-conditions/04b14714-6a57-4070-a967-1c0870400a96/terms',
-                ),
-              ),
-              _buildDivider(context),
-
-              _buildSettingsItem(
-                context: context,
-                icon: Icons.mail_outline,
-                title: 'தொடர்புக்கு (Contact Us)',
-                onTap: _launchEmail,
-              ),
-              _buildDivider(context),
-
-              SizedBox(height: Responsive.height(context, 15)),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -291,12 +317,49 @@ class SettingsScreen extends StatelessWidget {
   }
 
   Widget _buildRewardsSection(BuildContext context) {
+    // Never advertise a reward that cannot be earned: when no live rewarded
+    // unit is configured, this section stays hidden rather than sending the
+    // user into a broken ad flow.
+    if (!AdHelper.rewardedAdsAvailable) {
+      return Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: Responsive.padding(context, 20),
+          vertical: Responsive.padding(context, 12),
+        ),
+        child: Text(
+          'வெகுமதிகள் இப்போது கிடைக்கவில்லை.',
+          style: TextStyle(
+            fontSize: Responsive.fontSize(context, 13),
+            color: Colors.black45,
+          ),
+        ),
+      );
+    }
+
     return AnimatedBuilder(
       animation: RewardUnlockService.instance,
       builder: (context, _) {
         final rewards = RewardUnlockService.instance;
         return Column(
           children: [
+            _buildSettingsItem(
+              context: context,
+              icon: Icons.block,
+              title: 'விளம்பரமில்லா பயன்பாடு (Ad-free)',
+              subtitle: rewards.isAdFree
+                  ? 'மீதம் ${_formatRemaining(rewards.adFreeRemaining)}'
+                  : '1 மணி நேரம் · விளம்பரம் பார்த்து திறக்க',
+              trailingIcon: Icons.play_circle_outline,
+              onTap: () => _earnReward(
+                context,
+                title: 'விளம்பரமில்லா பயன்பாடு',
+                description:
+                    '1 மணி நேரத்திற்கு அனைத்து விளம்பரங்களையும் நீக்க ஒரு குறுகிய விளம்பரத்தைப் பாருங்கள்.',
+                onEarned: rewards.grantAdFree,
+                successMessage: '1 மணி நேரத்திற்கு விளம்பரங்கள் நீக்கப்பட்டன.',
+              ),
+            ),
+            _buildDivider(context),
             _buildSettingsItem(
               context: context,
               icon: Icons.remove_red_eye_outlined,
@@ -319,6 +382,24 @@ class SettingsScreen extends StatelessWidget {
                   }
                 },
                 successMessage: '5 நாட்களுக்கு கண் பாதுகாப்பு திறக்கப்பட்டது.',
+              ),
+            ),
+            _buildDivider(context),
+            _buildSettingsItem(
+              context: context,
+              icon: Icons.headphones,
+              title: 'பின்னணி இசை (Background audio)',
+              subtitle: rewards.backgroundAudioUnlocked
+                  ? 'மீதம் ${_formatRemaining(rewards.backgroundAudioRemaining)}'
+                  : '4 மணி நேரம் · விளம்பரம் பார்த்து திறக்க',
+              trailingIcon: Icons.play_circle_outline,
+              onTap: () => _earnReward(
+                context,
+                title: 'பின்னணி இசை',
+                description:
+                    '4 மணி நேரத்திற்கு ஆப்பை விட்டு வெளியேறியும் இசையைக் கேட்க ஒரு குறுகிய விளம்பரத்தைப் பாருங்கள்.',
+                onEarned: rewards.grantBackgroundAudio,
+                successMessage: '4 மணி நேரத்திற்கு பின்னணி இசை திறக்கப்பட்டது.',
               ),
             ),
             _buildDivider(context),

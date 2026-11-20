@@ -120,6 +120,7 @@ class ReadingProvider with ChangeNotifier {
   int _nextChapterClickCount = 0;
   int _previousChapterClickCount = 0;
   int _homeScreenClickCount = 0;
+  int _bookmarkClickCount = 0;
   InterstitialAd? _interstitialAd;
   DateTime? _lastInterstitialShownAt;
 
@@ -233,6 +234,22 @@ class ReadingProvider with ChangeNotifier {
     _homeScreenClickCount++;
 
     if (_homeScreenClickCount % 3 == 0) {
+      await _maybeShowInterstitial(context);
+    }
+
+    navigateAction();
+  }
+
+  /// Same natural-break interstitial as the home list, for chapters opened
+  /// from the bookmarks screen. Kept at every third open with the shared
+  /// one-minute cooldown so it never feels spammy.
+  Future<void> handleBookmarkOpen(
+    BuildContext context,
+    VoidCallback navigateAction,
+  ) async {
+    _bookmarkClickCount++;
+
+    if (_bookmarkClickCount % 3 == 0) {
       await _maybeShowInterstitial(context);
     }
 

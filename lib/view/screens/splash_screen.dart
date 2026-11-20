@@ -1,5 +1,7 @@
 // lib/views/splash_screen.dart
 
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -63,6 +65,12 @@ class _SplashScreenState extends State<SplashScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final screen = MediaQuery.sizeOf(context);
+    final logoSize = math.min(
+      Responsive.dim(context, 300),
+      math.min(screen.width * 0.62, screen.height * 0.45),
+    );
+
     return ParchmentBackground(
       imagePath: AppAssets.parchmentBg1,
       child: Scaffold(
@@ -74,8 +82,8 @@ class _SplashScreenState extends State<SplashScreen> {
               // 1. The Sacred Logo
               Image.asset(
                 AppAssets.logo2,
-                width: Responsive.dim(context, 300),
-                height: Responsive.dim(context, 300),
+                width: logoSize,
+                height: logoSize,
                 fit: BoxFit.contain,
               ),
 

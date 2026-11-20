@@ -7,6 +7,16 @@ class Responsive {
   static const double _tabletBreakpoint = 600.0;
   static const double _largeTabletBreakpoint = 900.0;
 
+  /// Widest the main app content (lists, settings, forms) is allowed to grow
+  /// on tablets. Keeping a comfortable column avoids the stretched, oversized
+  /// look that full-width phone layouts get on large screens.
+  static const double _contentMaxWidth = 760.0;
+
+  /// Long Tamil lines become hard to follow when they run the full width of a
+  /// tablet, so reading text gets an even tighter cap.
+  static const double _readingPortraitMaxWidth = 700.0;
+  static const double _readingLandscapeMaxWidth = 760.0;
+
   // ─── Core Scale Factors ───────────────────────────────────────────
 
   /// Width-based scale factor, capped at 600px to prevent oversized elements on tablets
@@ -46,9 +56,16 @@ class Responsive {
     return MediaQuery.of(context).orientation == Orientation.landscape;
   }
 
+  /// True for a tablet held upright.
+  static bool isTabletPortrait(BuildContext context) {
+    return isLandscape(context) == false &&
+        (isTablet(context) || isLargeTablet(context));
+  }
+
   /// True when the device is a tablet (>= 600px width) AND in landscape orientation
   static bool isTabletLandscape(BuildContext context) {
-    return isLandscape(context) && (isTablet(context) || isLargeTablet(context));
+    return isLandscape(context) &&
+        (isTablet(context) || isLargeTablet(context));
   }
 
   // ─── Landscape-Adapted Helpers ────────────────────────────────────
@@ -57,7 +74,9 @@ class Responsive {
   /// Returns a reduced value when in tablet landscape, otherwise the original.
   static double compactHeight(BuildContext context, double value) {
     if (isTabletLandscape(context)) {
-      return value * 0.6;
+      // Scale with the device as well: multiplying only by 0.6 used to make
+      // landscape toolbars shorter than the icons they contain.
+      return value * heightScale(context) * 0.8;
     }
     return height(context, value);
   }
@@ -73,14 +92,30 @@ class Responsive {
   /// Max content width for reading-style text to keep line length comfortable
   static double readingMaxWidth(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
-    if (isTabletLandscape(context)) {
-      // In landscape, cap at a comfortable reading width (max ~700px)
-      return screenWidth > 700 ? 700 : screenWidth;
-    }
-    if (screenWidth > _tabletBreakpoint) {
-      return _tabletBreakpoint;
-    }
-    return screenWidth;
+    final maxWidth = isLandscape(context)
+        ? _readingLandscapeMaxWidth
+        : _readingPortraitMaxWidth;
+    return screenWidth > maxWidth ? maxWidth : screenWidth;
+  }
+
+  /// Max width for general app content (chapter lists, settings, forms).
+  ///
+  /// On phones this equals the screen width so the existing layout is
+  /// untouched. On tablets the content is centred in a readable column
+  /// instead of stretching edge to edge.
+  static double contentMaxWidth(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    return screenWidth > _contentMaxWidth ? _contentMaxWidth : screenWidth;
+  }
+
+  /// Extra horizontal padding for tablet content. Phones keep their existing
+  /// value so their layout does not change.
+  static double contentPadding(
+    BuildContext context,
+    double phoneValue, {
+    double tabletValue = 32.0,
+  }) {
+    return isPhone(context) ? phoneValue : tabletValue;
   }
 
   // ─── Responsive Dimension Helpers ─────────────────────────────────
@@ -124,11 +159,7 @@ class Responsive {
 
   /// Maximum content width to prevent overly wide text on tablets
   static double maxContentWidth(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    if (screenWidth > _tabletBreakpoint) {
-      return _tabletBreakpoint;
-    }
-    return screenWidth;
+    return contentMaxWidth(context);
   }
 
   // ─── Responsive Padding/Margin Presets ────────────────────────────
@@ -146,8 +177,11 @@ class Responsive {
   }
 
   /// Standard symmetric padding
-  static EdgeInsets symmetricPadding(BuildContext context,
-      {double horizontal = 16, double vertical = 8}) {
+  static EdgeInsets symmetricPadding(
+    BuildContext context, {
+    double horizontal = 16,
+    double vertical = 8,
+  }) {
     return EdgeInsets.symmetric(
       horizontal: padding(context, horizontal),
       vertical: padding(context, vertical),
@@ -168,8 +202,11 @@ class Responsive {
     double userScale = 1.0,
     String fontFamily = '',
   }) {
+    // Cap the tablet scale-up so titles do not become disproportionately
+    // large compared with the rest of the interface.
+    final scaled = landscapeFontSize(context, 22) * userScale;
     return TextStyle(
-      fontSize: landscapeFontSize(context, 22) * userScale,
+      fontSize: scaled > 36 ? 36 : scaled,
       fontWeight: FontWeight.bold,
       color: const Color(0xFF4A0E00),
       fontFamily: fontFamily,
@@ -196,7 +233,11 @@ class ResponsiveText {
     double userScale = 1.0,
     String fontFamily = '',
   }) {
-    return Responsive.chapterTitle(context, userScale: userScale, fontFamily: fontFamily);
+    return Responsive.chapterTitle(
+      context,
+      userScale: userScale,
+      fontFamily: fontFamily,
+    );
   }
 
   static TextStyle songBody(BuildContext context, {double userScale = 1.0}) {
