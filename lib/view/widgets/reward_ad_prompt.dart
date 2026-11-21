@@ -12,6 +12,7 @@ Future<bool> showRewardedAdPrompt(
   required String title,
   required String description,
   String confirmLabel = 'விளம்பரம் பார்',
+  RewardedAdPurpose purpose = RewardedAdPurpose.standard,
 }) async {
   final confirmed = await showDialog<bool>(
     context: context,
@@ -53,7 +54,7 @@ Future<bool> showRewardedAdPrompt(
     ),
   ).whenComplete(() => loadingVisible = false);
 
-  final earned = await RewardedAdService.instance.showOrLoad();
+  final earned = await RewardedAdService.instance.showOrLoad(purpose);
 
   if (context.mounted && loadingVisible) {
     Navigator.of(context, rootNavigator: true).pop();

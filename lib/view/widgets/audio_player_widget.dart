@@ -7,6 +7,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:http/http.dart' as http;
 import 'package:thiruvasagampro/services/notification_artwork_service.dart';
 import 'package:thiruvasagampro/services/reward_unlock_service.dart';
+import 'package:thiruvasagampro/services/rewarded_ad_service.dart';
 import 'package:thiruvasagampro/services/secure_audio_store.dart';
 import 'package:thiruvasagampro/utils/ad_helper.dart';
 import 'package:thiruvasagampro/utils/app_colors.dart';
@@ -565,6 +566,7 @@ class _AudioPlayerWidgetState extends State<AudioPlayerWidget>
         title: 'ஆஃப்லைன் இசை',
         description:
             '24 மணி நேரத்திற்கு ஆஃப்லைன் பதிவிறக்கத்தைத் திறக்க ஒரு குறுகிய விளம்பரத்தைப் பாருங்கள்.',
+        purpose: RewardedAdPurpose.download,
       );
       if (!earned || !mounted) return;
       await RewardUnlockService.instance.grantOffline();

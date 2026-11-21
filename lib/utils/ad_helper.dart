@@ -33,6 +33,10 @@ class AdHelper {
       'ca-app-pub-3940256099942544/5224354917';
   static const String _iosRewardedTest =
       'ca-app-pub-3940256099942544/1712485313';
+  static const String _androidRewardedInterstitialTest =
+      'ca-app-pub-3940256099942544/5354046379';
+  static const String _iosRewardedInterstitialTest =
+      'ca-app-pub-3940256099942544/6978759866';
   static const String _androidAppOpenTest =
       'ca-app-pub-3940256099942544/9257395921';
   static const String _iosAppOpenTest =
@@ -46,14 +50,30 @@ class AdHelper {
   //
   //   --dart-define=REWARDED_AD_UNIT_ID=ca-app-pub-xxxx/yyyy
   //   --dart-define=REWARDED_AD_UNIT_ID_IOS=ca-app-pub-xxxx/yyyy
+  //   --dart-define=REWARDED_INTERSTITIAL_AD_UNIT_ID=ca-app-pub-xxxx/yyyy
+  //   --dart-define=REWARDED_INTERSTITIAL_AD_UNIT_ID_IOS=ca-app-pub-xxxx/yyyy
   //   --dart-define=NATIVE_AD_UNIT_ID_ANDROID=ca-app-pub-xxxx/yyyy
   //   --dart-define=NATIVE_AD_UNIT_ID_IOS=ca-app-pub-xxxx/yyyy
   static const String _releaseRewardedAdUnitId = String.fromEnvironment(
     'REWARDED_AD_UNIT_ID',
+    defaultValue: 'ca-app-pub-7097654589006373/4926667151',
   );
   static const String _releaseRewardedAdUnitIdIOS = String.fromEnvironment(
     'REWARDED_AD_UNIT_ID_IOS',
   );
+
+  /// Live rewarded-interstitial unit. AdMob treats rewarded and
+  /// rewarded-interstitial as separate formats: loading an interstitial unit
+  /// through `RewardedAd.load` fails with "Ad unit doesn't match format"
+  /// (code 3). The unit below is the account's rewarded-interstitial unit, so
+  /// it is the default for the opt-in reward flows.
+  static const String _releaseRewardedInterstitialAdUnitIdAndroid =
+      String.fromEnvironment(
+        'REWARDED_INTERSTITIAL_AD_UNIT_ID',
+        defaultValue: 'ca-app-pub-7097654589006373/6048177136',
+      );
+  static const String _releaseRewardedInterstitialAdUnitIdIOS =
+      String.fromEnvironment('REWARDED_INTERSTITIAL_AD_UNIT_ID_IOS');
   static const String _releaseNativeAdUnitIdAndroid = String.fromEnvironment(
     'NATIVE_AD_UNIT_ID_ANDROID',
   );
@@ -112,9 +132,46 @@ class AdHelper {
     throw UnsupportedError('Unsupported platform');
   }
 
-  static bool get rewardedAdsAvailable => rewardedAdUnitId != null;
+  /// Units used for the offline-download reward. Two download units are
+  /// configured because a single unit can bottom out on fill rate; the service
+  /// tries them in order and falls back automatically.
+  static const List<String> _downloadRewardAdUnitIdsAndroid = <String>[
+    'ca-app-pub-7097654589006373/4926667151',
+    'ca-app-pub-7097654589006373/2715280948',
+  ];
 
-  /// `null` when no live rewarded unit was configured for this platform.
+  /// Candidate units for the offline-download reward, in preference order.
+  static List<String> get downloadRewardAdUnitIds {
+    if (testAdsEnabled) {
+      final unit = rewardedAdUnitId;
+      return unit == null ? const <String>[] : <String>[unit];
+    }
+    if (Platform.isAndroid) return _downloadRewardAdUnitIdsAndroid;
+    if (Platform.isIOS) {
+      final unit = rewardedAdUnitId;
+      return unit == null ? const <String>[] : <String>[unit];
+    }
+    return const <String>[];
+  }
+
+  /// Candidate units for every other reward flow, in preference order. The
+  /// rewarded-interstitial unit comes first because it is the less intrusive
+  /// format, then the classic rewarded unit as a fallback.
+  static List<String> get standardRewardAdUnitIds {
+    final units = <String>[];
+    final interstitial = rewardedInterstitialAdUnitId;
+    if (interstitial != null) units.add(interstitial);
+    final rewarded = rewardedAdUnitId;
+    if (rewarded != null && rewarded != interstitial) units.add(rewarded);
+    return units;
+  }
+
+  static bool get rewardedAdsAvailable =>
+      rewardedAdUnitId != null ||
+      rewardedInterstitialAdUnitId != null ||
+      downloadRewardAdUnitIds.isNotEmpty;
+
+  /// Classic rewarded unit. `null` when none was configured for this platform.
   static String? get rewardedAdUnitId {
     if (testAdsEnabled) {
       if (Platform.isAndroid) return _androidRewardedTest;
@@ -128,6 +185,28 @@ class AdHelper {
       return _releaseRewardedAdUnitIdIOS.isEmpty
           ? null
           : _releaseRewardedAdUnitIdIOS;
+    }
+    return null;
+  }
+
+  /// Rewarded-interstitial unit. Preferred by the opt-in reward flows because
+  /// it is non-skippable but less intrusive than a classic rewarded video.
+  /// `null` when no unit was configured for this platform.
+  static String? get rewardedInterstitialAdUnitId {
+    if (testAdsEnabled) {
+      if (Platform.isAndroid) return _androidRewardedInterstitialTest;
+      if (Platform.isIOS) return _iosRewardedInterstitialTest;
+      return null;
+    }
+    if (Platform.isAndroid) {
+      return _releaseRewardedInterstitialAdUnitIdAndroid.isEmpty
+          ? null
+          : _releaseRewardedInterstitialAdUnitIdAndroid;
+    }
+    if (Platform.isIOS) {
+      return _releaseRewardedInterstitialAdUnitIdIOS.isEmpty
+          ? null
+          : _releaseRewardedInterstitialAdUnitIdIOS;
     }
     return null;
   }
